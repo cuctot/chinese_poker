@@ -1,0 +1,145 @@
+* {
+  box-sizing: border-box;
+}
+
+.trang {
+  font-family: -apple-system, sans-serif;
+  background: linear-gradient(160deg, #0f2027, #1a3a2a);
+  min-height: 100vh;
+  padding: 16px;
+  color: white;
+}
+
+.trang h1 {
+  text-align: center;
+  color: #f0c040;
+  margin-bottom: 16px;
+}
+
+.vung-chi {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+  min-height: 90px;
+}
+
+.vung-tieu-de {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f0c040;
+  margin-bottom: 6px;
+}
+
+.vung-noi-dung {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.la-bai {
+  width: 48px;
+  height: 66px;
+  background: white;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  font-weight: bold;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.la-bai-goc {
+  font-size: 13px;
+}
+
+.la-bai-giua {
+  text-align: center;
+  font-size: 18px;
+}
+
+.thong-bao-hop-le {
+  color: #4ade80;
+  font-weight: bold;
+  font-size: 18px;
+  text-align: center;
+}
+
+.thong-bao-loi {
+  color: #f87171;
+  font-weight: bold;
+  font-size: 18px;
+  text-align: center;
+}
+
+.nut-xac-nhan {
+  display: block;
+  margin: 12px auto;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  background: linear-gradient(135deg, #d4a017, #f0c040);
+  color: #1a2010;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.ket-qua {
+  background: rgba(255,215,0,0.08);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.diem-duong { color: #4ade80; }
+.diem-am { color: #f87171; }
+
+/* Mặc định (điện thoại dọc): lá bài nhỏ gọn, đã đặt ở trên */
+
+/* Màn hình rộng hơn (iPad, máy tính): lá bài to hơn, giới hạn chiều rộng
+   tổng thể để không bị dàn quá rộng trên màn hình lớn */
+@media (min-width: 700px) {
+  .la-bai {
+    width: 58px;
+    height: 80px;
+  }
+  .la-bai-giua {
+    font-size: 22px;
+  }
+  .trang {
+    max-width: 700px;
+    margin: 0 auto;
+  }
+}
+
+.la-bai-dang-keo {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999;
+  transform: scale(1.1);
+}
+
+.khoi-doi-thu {
+  background: rgba(0,0,0,0.2);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.ten-doi-thu {
+  font-weight: bold;
+  color: #f0c040;
+  margin-bottom: 8px;
+}
+
+.vung-chi-doi-thu {
+  margin-bottom: 6px;
+  min-height: auto;
+}

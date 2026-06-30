@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"/Volumes/AI_CORE/Users/huynguyen/My Downloads/chinese-poker\" && echo \"---src---\" && ls -la \"/Volumes/AI_CORE/Users/huynguyen/My Downloads/chinese-poker/src\")",
+      "Read(//Volumes/AI_CORE/Users/huynguyen/My Downloads/chinese-poker/**)"
+    ]
+  }
+}
