@@ -64,6 +64,20 @@
   font-size: 18px;
 }
 
+.la-bai-sap {
+  background: linear-gradient(135deg, #7f1d1d, #b91c1c);
+  border: 1px solid rgba(255,255,255,0.35);
+  justify-content: center;
+  align-items: center;
+  color: #fef2f2;
+}
+
+.la-bai-sap-noi-dung {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
 .thong-bao-hop-le {
   color: #4ade80;
   font-weight: bold;

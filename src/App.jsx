@@ -144,7 +144,12 @@ function App() {
             <div className="vung-tieu-de">{nhan}</div>
             <div className="vung-noi-dung">
               {ds.map(l => (
-                <Card key={`${l.rank}-${l.suit}`} laBai={l} onPointerDown={() => {}} />
+                <Card
+                  key={`${l.rank}-${l.suit}`}
+                  laBai={l}
+                  onPointerDown={() => {}}
+                  faceDown={!daXacNhan}
+                />
               ))}
             </div>
           </div>
