@@ -7,7 +7,7 @@ import { xepBaiHopLe } from './cardEngine.js'
 // đảm bảo LUÔN xếp được bài đúng luật, không bị Binh lủng. Đã kiểm thử
 // 20,000 lần ngẫu nhiên, 0 lần bị lủng — đủ tin cậy cho V1. Thuật toán
 // thông minh hơn (tối ưu điểm thắng) để dành cho phiên bản sau.
-export function aiXepBai(boBai13La) {
+export function aiXepBai(boBai13La, ruleset) {
   const bai = [...boBai13La].sort((a, b) => b.rank - a.rank);
   const n = bai.length; // luôn là 13
 
@@ -26,10 +26,10 @@ export function aiXepBai(boBai13La) {
     const phanB = conLai.slice(5, 10);
 
     // Thử cả 2 hướng: phanA làm Chi Cuối hoặc phanB làm Chi Cuối
-    if (xepBaiHopLe(chiDau, phanB, phanA)) {
+    if (xepBaiHopLe(chiDau, phanB, phanA, ruleset)) {
       return { chiDau, chiGiua: phanB, chiCuoi: phanA };
     }
-    if (xepBaiHopLe(chiDau, phanA, phanB)) {
+    if (xepBaiHopLe(chiDau, phanA, phanB, ruleset)) {
       return { chiDau, chiGiua: phanA, chiCuoi: phanB };
     }
   }

@@ -11,7 +11,7 @@ function Card({ laBai, onPointerDown, faceDown = false }) {
     );
   }
 
-  const ten = TEN_RANK[laBai.rank];
+  const ten = TEN_RANK[laBai.rank - 2];
   const kyHieu = KY_HIEU_CHAT[laBai.suit];
   const mau = MAU_CHAT[laBai.suit];
 
