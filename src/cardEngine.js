@@ -26,6 +26,23 @@ export function chiaBai() {
   return [bai.slice(0, 13), bai.slice(13, 26), bai.slice(26, 39), bai.slice(39, 52)];
 }
 
+// Xếp lại các rank theo ĐÚNG thứ tự dùng để so sánh khi có nhóm lá giống
+// nhau (đôi/sám cô/cù lũ/tứ quý...): nhóm có SỐ LƯỢNG lá nhiều hơn xếp
+// trước, cùng số lượng thì rank cao hơn xếp trước, cuối cùng mới tới các
+// lá lẻ (kicker). KHÔNG được sắp xếp giảm dần đơn thuần theo rank — vì lá
+// lẻ có rank CAO HƠN cả cặp/bộ vẫn có thể lọt lên đầu mảng, làm sai lệch
+// khi so sánh 2 bộ bài cùng loại (vd đôi 7 kèm kicker K nếu sắp giảm dần
+// đơn thuần sẽ có mảng [K,7,7,...] và bị coi "mạnh hơn" đôi J kèm kicker 9
+// dù đôi J phải thắng đôi 7 mới đúng).
+function sapXepTheoNhom(ranks) {
+  const demSoLuong = {};
+  ranks.forEach(r => { demSoLuong[r] = (demSoLuong[r] || 0) + 1; });
+  return Object.entries(demSoLuong)
+    .map(([rank, soLuong]) => ({ rank: Number(rank), soLuong }))
+    .sort((a, b) => b.soLuong - a.soLuong || b.rank - a.rank)
+    .flatMap(({ rank, soLuong }) => Array(soLuong).fill(rank));
+}
+
 // Đánh giá độ mạnh 1 bộ 5 lá. loai: 0=Mậu thầu,1=Đôi,2=Thú,3=Sám cô,
 // 4=Sảnh,5=Thùng,6=Cù lũ,7=Tứ quý,8=Thùng phá sảnh
 export function danhGia5La(laBai) {
@@ -38,15 +55,20 @@ export function danhGia5La(laBai) {
   const demSoLuong = {};
   ranks.forEach(r => { demSoLuong[r] = (demSoLuong[r] || 0) + 1; });
   const cacSoLuong = Object.values(demSoLuong).sort((a, b) => b - a);
+  // Sảnh/Thùng/Thùng phá sảnh/Mậu thầu không có nhóm lá giống nhau (toàn
+  // rank khác nhau, trừ trường hợp cù lũ/tứ quý đã tách riêng ở trên) nên
+  // `ranks` giảm dần đơn thuần đã đúng thứ tự so sánh — chỉ những loại có
+  // đôi/sám cô mới cần `sapXepTheoNhom`.
+  const diemNhom = sapXepTheoNhom(ranks);
 
   if (laSanh && laThung) return { loai: 8, diem: ranks };
-  if (cacSoLuong[0] === 4) return { loai: 7, diem: ranks };
-  if (cacSoLuong[0] === 3 && cacSoLuong[1] === 2) return { loai: 6, diem: ranks };
+  if (cacSoLuong[0] === 4) return { loai: 7, diem: diemNhom };
+  if (cacSoLuong[0] === 3 && cacSoLuong[1] === 2) return { loai: 6, diem: diemNhom };
   if (laThung) return { loai: 5, diem: ranks };
   if (laSanh) return { loai: 4, diem: ranks };
-  if (cacSoLuong[0] === 3) return { loai: 3, diem: ranks };
-  if (cacSoLuong[0] === 2 && cacSoLuong[1] === 2) return { loai: 2, diem: ranks };
-  if (cacSoLuong[0] === 2) return { loai: 1, diem: ranks };
+  if (cacSoLuong[0] === 3) return { loai: 3, diem: diemNhom };
+  if (cacSoLuong[0] === 2 && cacSoLuong[1] === 2) return { loai: 2, diem: diemNhom };
+  if (cacSoLuong[0] === 2) return { loai: 1, diem: diemNhom };
   return { loai: 0, diem: ranks };
 }
 
@@ -57,7 +79,7 @@ export function danhGia3La(laBai) {
   ranks.forEach(r => { demSoLuong[r] = (demSoLuong[r] || 0) + 1; });
   const cacSoLuong = Object.values(demSoLuong).sort((a, b) => b - a);
   if (cacSoLuong[0] === 3) return { loai: 2, diem: ranks };
-  if (cacSoLuong[0] === 2) return { loai: 1, diem: ranks };
+  if (cacSoLuong[0] === 2) return { loai: 1, diem: sapXepTheoNhom(ranks) };
   return { loai: 0, diem: ranks };
 }
 
@@ -90,8 +112,14 @@ export function xepBaiHopLe(chiDau, chiGiua, chiCuoi, ruleset) {
   const sGiua = dieuChinhSoSanhSanhHa(dGiua, ruleset);
   const sCuoi = dieuChinhSoSanhSanhHa(dCuoi, ruleset);
   if (soSanh(sCuoi, sGiua) < 0) return false;
-  const loaiDauTren5 = dDau.loai === 2 ? 3 : dDau.loai;
-  return dGiua.loai >= loaiDauTren5;
+  // Quy đổi loại của Đầu (3 lá: 0=Mậu thầu/1=Đôi/2=Sám cô) sang ĐÚNG thang
+  // loại của Giữa (5 lá: Sám cô=3) rồi so sánh ĐẦY ĐỦ cả loại LẪN điểm số
+  // trong cùng loại (dùng lại `soSanh`) — trước đây chỉ so `loai` suông
+  // nên bỏ lọt trường hợp CÙNG loại nhưng Đầu mạnh hơn Giữa (vd Đầu đôi Á
+  // vẫn bị coi hợp lệ dù so với Giữa đôi Q, trong khi đôi Á > đôi Q nghĩa
+  // là Đầu mạnh hơn Giữa — thực chất là lủng).
+  const dDauTren5 = { loai: dDau.loai === 2 ? 3 : dDau.loai, diem: dDau.diem };
+  return soSanh(sGiua, dDauTren5) >= 0;
 }
 
 function maLoaiChiTiet(danhGia, tenChi) {

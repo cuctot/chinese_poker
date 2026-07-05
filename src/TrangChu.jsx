@@ -23,8 +23,11 @@ function TrangChu({ onDieuHuong }) {
         <button className="nut-dieu-huong nut-sap-ra-mat" disabled>
           👥 Chơi với bạn bè <span className="nhan-sap-ra-mat">Sắp ra mắt</span>
         </button>
-        <button className="nut-dieu-huong nut-sap-ra-mat" disabled>
-          📝 Ghi điểm <span className="nhan-sap-ra-mat">Sắp ra mắt</span>
+        <button className="nut-dieu-huong" onClick={() => onDieuHuong('ghiDiem')}>
+          📝 Ghi điểm
+        </button>
+        <button className="nut-dieu-huong" onClick={() => onDieuHuong('lichSu')}>
+          🕘 Lịch sử
         </button>
         <button className="nut-dieu-huong nut-sap-ra-mat" disabled>
           📊 Thống kê <span className="nhan-sap-ra-mat">Sắp ra mắt</span>

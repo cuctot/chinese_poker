@@ -1,18 +1,27 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import './App.css'
-import { chiaBai, xepBaiHopLe, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai, sapXepDeHienThi } from './cardEngine.js'
+import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai } from './cardEngine.js'
 import { aiXepBai } from './aiEngine.js'
 import { RULESET_PRESETS, layRulesetTuPreset, isValidRuleset } from './ruleset.js'
-import Card from './Card.jsx'
+import TheBaiDon from './TheBaiDon.jsx'
+import HangBai from './HangBai.jsx'
 import LuatChoi from './LuatChoi.jsx'
 import TrangChu from './TrangChu.jsx'
 import ChonVan from './ChonVan.jsx'
+import GhiDiem from './GhiDiem.jsx'
+import LichSu from './LichSu.jsx'
+import {
+  taoHiepMoi, taoVanMoi, themVanVaoLichSu, layHiepDangDoHoacNull,
+  docDanhSach, ghiDanhSach, KHOA_HIEP, KHOA_VAN,
+  nguoiChiaChoVan, tinhTongKetHiep, layVanCuaHiep,
+} from './lichSuChoi.js'
 
 // 13 ô cố định: index 0-2 = Chi Đầu, 3-7 = Chi Giữa, 8-12 = Chi Cuối
 const BAT_DAU = { dau: 0, giua: 3, cuoi: 8 };
 const KHOA_LUU_RULESET = 'mauBinhLuatChoi';
 const KHOA_LUU_PRESET_RIENG = 'mauBinhLuatTuyChinh';
 const TEN_NGUOI_CHOI = ['Bạn', 'Đối thủ 1', 'Đối thủ 2', 'Đối thủ 3'];
+const NGUON = 'choiAI';
 const TEN_THANG_TRANG_HIEN_THI = {
   rongCuon: 'Rồng cuốn', sanhRong: 'Sảnh rồng', namDoiMotSam: 'Năm đôi 1 sám',
   lucPheBon: 'Lục phé bôn', namDoiThong: 'Năm đôi thông', baThung: 'Ba thùng', baSanh: 'Ba sảnh',
@@ -50,71 +59,50 @@ function timPresetTrongDanhSach(id, danhSach) {
     || danhSach[0];
 }
 
-const KHOA_LUU_VAN_DANG_CHOI = 'mauBinhVanDangChoi';
-
-function docVanDangChoi() {
-  try {
-    const raw = localStorage.getItem(KHOA_LUU_VAN_DANG_CHOI);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    // Chỉ coi là "ván đang dở" (chơi tiếp được) khi CHƯA xác nhận bài và
-    // KHÔNG phải thắng trắng — 1 ván đã kết thúc thì không có gì để tiếp
-    // tục nữa. Phòng trường hợp dữ liệu cũ (lưu trước khi có luật này) lỡ
-    // ghi lại 1 ván đã xong, dọn luôn cho sạch.
-    if (!obj || obj.daXacNhan || obj.ketQuaThangTrang) {
-      localStorage.removeItem(KHOA_LUU_VAN_DANG_CHOI);
-      return null;
-    }
-    return obj;
-  } catch {
-    return null;
-  }
-}
-
-function luuVanDangChoi(trangThai) {
-  localStorage.setItem(KHOA_LUU_VAN_DANG_CHOI, JSON.stringify(trangThai));
-}
-
-function xoaVanDangChoi() {
-  localStorage.removeItem(KHOA_LUU_VAN_DANG_CHOI);
-}
-
 function App() {
-  const [vanDaLuu] = useState(() => docVanDangChoi()); // đọc đúng 1 lần lúc mở app
-
-  const [tatCaBai, setTatCaBai] = useState(() => vanDaLuu ? vanDaLuu.tatCaBai : chiaBai());
+  const [tatCaBai, setTatCaBai] = useState(() => chiaBai());
   const boBaiCuaToi = tatCaBai[0];
 
   // 1 mảng DUY NHẤT, 13 phần tử. Vị trí trong mảng CHÍNH LÀ vị trí ô của
   // lá đó trong 3 chi — không còn khái niệm "bài trên tay" tách riêng.
-  // Giá trị khởi tạo giữ nguyên thứ tự ngẫu nhiên do chiaBai() tạo ra.
-  const [oCacChi, setOCacChi] = useState(() => vanDaLuu ? vanDaLuu.oCacChi : [...boBaiCuaToi]);
+  const [oCacChi, setOCacChi] = useState(() => [...boBaiCuaToi]);
 
   const [dragging, setDragging] = useState(null); // { tuIndex, laBai, x, y }
   const refsO = useRef([]); // 13 ref, mỗi ref ứng với đúng 1 ô (theo index 0-12)
 
-  const [daXacNhan, setDaXacNhan] = useState(() => vanDaLuu ? vanDaLuu.daXacNhan : false);
-  const [ketQuaDiem, setKetQuaDiem] = useState(() => vanDaLuu ? vanDaLuu.ketQuaDiem : null);
+  const [daXacNhan, setDaXacNhan] = useState(false);
+  const [ketQuaDiem, setKetQuaDiem] = useState(null);
   const [hienGiaiTrinh, setHienGiaiTrinh] = useState(false);
   const [dangXacNhanBaoU, setDangXacNhanBaoU] = useState(false);
-  const [trang, setTrang] = useState('trangChu'); // 'trangChu' | 'choiAI' | 'luatChoi'
+  const [trang, setTrang] = useState('trangChu'); // 'trangChu' | 'choiAI' | 'luatChoi' | 'ghiDiem' | 'lichSu'
   const [daChonVan, setDaChonVan] = useState(false);
-  // Khác với vanDaLuu (chỉ đọc 1 lần lúc mount, dùng để khởi tạo state ván
-  // chơi) — coVanDaLuu phải LUÔN phản ánh đúng hiện trạng localStorage
-  // ngay trong phiên hiện tại, vì "Dừng chơi" và "Bắt đầu ván mới" đều
-  // không tải lại trang (SPA), nên cần cập nhật state này thủ công mỗi khi
-  // lưu/xóa ván (xem dungChoi/chonVanMoi).
-  const [coVanDaLuu, setCoVanDaLuu] = useState(() => vanDaLuu !== null);
   const [trangThaiLuat, setTrangThaiLuat] = useState(() => docTrangThaiLuat());
   const { presetId, ruleset, daTuyChinh } = trangThaiLuat;
   const boBaiDoiThu = useMemo(() => [tatCaBai[1], tatCaBai[2], tatCaBai[3]], [tatCaBai]);
-  const [baiDoiThu, setBaiDoiThu] = useState(() => vanDaLuu ? vanDaLuu.baiDoiThu : [
+  const [baiDoiThu, setBaiDoiThu] = useState(() => [
     aiXepBai(boBaiDoiThu[0], ruleset),
     aiXepBai(boBaiDoiThu[1], ruleset),
     aiXepBai(boBaiDoiThu[2], ruleset),
   ]);
   const [presetRieng, setPresetRieng] = useState(() => docPresetRieng());
   const tatCaPreset = [...RULESET_PRESETS, ...presetRieng];
+
+  // ---- Lịch sử Chơi với AI (V8): chỉ còn Hiệp (gốc) + Ván, không còn
+  // Phiên. Chỉ giữ danhSachVanLS làm state React (cần để hiển thị
+  // "Ván Y/12" sống) — Hiệp không cần giữ state riêng vì mọi thao tác tạo
+  // hiệp đều đọc thẳng localStorage mới nhất (docDanhSach) rồi ghi lại
+  // ngay, không có chỗ nào khác trong màn hình cần đọc lại danh sách Hiệp
+  // — vì GhiDiem.jsx là 1 component riêng, tự giữ bản sao khác của CÙNG
+  // dữ liệu, mount/unmount độc lập khi điều hướng. ----
+  const [danhSachVanLS, setDanhSachVanLS] = useState(() => docDanhSach(KHOA_VAN));
+
+  // Hiệp AI đang dùng để ghi ván vào — null khi còn ở màn ChonVan (chưa
+  // quyết định tiếp hiệp cũ hay bắt đầu hiệp mới).
+  const [hiepAIHienTai, setHiepAIHienTai] = useState(null);
+
+  // Kết quả tổng kết hiệp (nếu VÁN VỪA XONG là ván thứ 12) — null nếu chưa
+  // tới lúc tổng kết.
+  const [ketQuaHiepVuaXong, setKetQuaHiepVuaXong] = useState(null);
 
   useEffect(() => {
     localStorage.setItem(KHOA_LUU_RULESET, JSON.stringify(trangThaiLuat));
@@ -132,52 +120,10 @@ function App() {
     ]);
   }, [ruleset, boBaiDoiThu]);
 
-  const ketQuaThangTrang = useMemo(() => {
-    const nguoiChoi = [
-      { ten: 'Bạn', ca13La: boBaiCuaToi },
-      { ten: 'Đối thủ 1', ca13La: boBaiDoiThu[0] },
-      { ten: 'Đối thủ 2', ca13La: boBaiDoiThu[1] },
-      { ten: 'Đối thủ 3', ca13La: boBaiDoiThu[2] },
-    ];
-    return tinhDiemThangTrangAI(nguoiChoi, ruleset);
-  }, [boBaiCuaToi, boBaiDoiThu, ruleset]);
-
-  const ketQuaHienTai = ketQuaThangTrang || ketQuaDiem;
-
-  function dieuHuong(trangMoi) {
-    setTrang(trangMoi);
-  }
-
-  function dungChoi() {
-    // "Ván đang dở" CHỈ tồn tại khi CHƯA xác nhận bài (kể cả thắng trắng
-    // cũng coi là đã kết thúc ngay từ đầu, không có gì để "chơi tiếp"). Nếu
-    // ván đã kết thúc mà bấm Dừng chơi, không lưu lại gì để "Chơi tiếp ván
-    // đang dở" không thể vô tình mở lại 1 ván đã xong.
-    if (vanDaKetThuc) {
-      xoaVanDangChoi();
-      setCoVanDaLuu(false);
-    } else {
-      luuVanDangChoi({
-        tatCaBai, oCacChi, baiDoiThu, ketQuaThangTrang, daXacNhan, ketQuaDiem,
-      });
-      setCoVanDaLuu(true);
-    }
-    setTrang('trangChu');
-    setDaChonVan(false);
-  }
-
-  function chonChoiTiep() {
-    // vanDaLuu đã có sẵn từ lúc mount app (Phase 2), toàn bộ state ván chơi
-    // đã khởi tạo đúng theo nó rồi — chỉ cần "mở khóa" màn chơi ra xem.
-    setDaChonVan(true);
-  }
-
-  function chonVanMoi() {
-    xoaVanDangChoi();
-    // Chia bài mới và ghi đè trực tiếp lên toàn bộ state ván chơi qua các
-    // hàm setState — KHÔNG dùng window.location.reload(), vì reload cả
-    // trang sẽ làm mất luôn state `trang`/`daChonVan`, khiến app bật về
-    // lại đúng trang chủ thay vì vào thẳng ván mới như mong muốn.
+  // Chia 1 bộ bài MỚI và vào thẳng màn chơi, gắn với đúng `hiep` truyền
+  // vào (hiệp dở dang muốn tiếp tục, hiệp vừa tạo mới, hoặc hiệp hiện tại
+  // muốn chơi thêm 1 ván nữa).
+  function batDauVanMoi(hiep) {
     const baiMoi = chiaBai();
     setTatCaBai(baiMoi);
     setOCacChi([...baiMoi[0]]);
@@ -188,8 +134,110 @@ function App() {
     ]);
     setDaXacNhan(false);
     setKetQuaDiem(null);
-    setCoVanDaLuu(false);
+    setKetQuaHiepVuaXong(null);
+    setHiepAIHienTai(hiep);
     setDaChonVan(true);
+  }
+
+  function chonTiepHiepDoDang() {
+    const hiep = layHiepDangDoHoacNull(docDanhSach(KHOA_HIEP), docDanhSach(KHOA_VAN), NGUON);
+    batDauVanMoi(hiep);
+  }
+
+  function chonHiepMoi() {
+    const dsHiepTuoi = docDanhSach(KHOA_HIEP);
+    const hiepMoi = taoHiepMoi(NGUON, TEN_NGUOI_CHOI);
+    const dsHiepMoi = [...dsHiepTuoi, hiepMoi];
+    ghiDanhSach(KHOA_HIEP, dsHiepMoi);
+    batDauVanMoi(hiepMoi);
+  }
+
+  // Tính SỐNG lúc đang chơi — biết ngay đang ở Ván nào (trong Hiệp) để
+  // hiển thị trên đầu màn hình.
+  const soVanDaXongHienTai = hiepAIHienTai ? layVanCuaHiep(hiepAIHienTai.id, danhSachVanLS).length : 0;
+
+  // Điểm tích lũy CỦA HIỆP ĐANG CHƠI DỞ, tính lại trực tiếp từ danh sách
+  // Ván thật mỗi lần render (không cache) — hiển thị ngay cạnh tên mỗi
+  // người trên bàn (xem renderTenVaDiem).
+  const tongCongDonHiepHienTai = hiepAIHienTai ? tinhTongKetHiep(layVanCuaHiep(hiepAIHienTai.id, danhSachVanLS)) : {};
+
+  // Ghi 1 ván Chơi-AI vào lịch sử, vào đúng hiepAIHienTai — trả về biết
+  // ván vừa ghi có phải ván THỨ 12 của hiệp hay không, để nơi gọi quyết
+  // định hiện màn "Ván tiếp theo" bình thường hay màn "Tổng kết Hiệp".
+  function ghiVanAIVaoLichSu({ nguoiChoiBaiThat, diem, laThangTrang, loaiThangTrang }) {
+    const dsVanTuoi = docDanhSach(KHOA_VAN);
+    const soThuTuVanTrongHiep = layVanCuaHiep(hiepAIHienTai.id, dsVanTuoi).length + 1;
+    const { nguoiChia, lanChia } = nguoiChiaChoVan(hiepAIHienTai.nguoiChoi, soThuTuVanTrongHiep);
+
+    const vanMoi = taoVanMoi({
+      hiepId: hiepAIHienTai.id, soThuTuTrongHiep: soThuTuVanTrongHiep, lanChiaThu: lanChia, nguoiChia,
+      nguon: NGUON, diem, nguoiChoiBaiThat, laThangTrang, loaiThangTrang,
+    });
+    const danhSachVanMoi = themVanVaoLichSu(vanMoi, dsVanTuoi);
+    ghiDanhSach(KHOA_VAN, danhSachVanMoi);
+    setDanhSachVanLS(danhSachVanMoi);
+
+    if (soThuTuVanTrongHiep === 12) {
+      const tongKet = tinhTongKetHiep(layVanCuaHiep(hiepAIHienTai.id, danhSachVanMoi));
+      return { hiepVuaXong: true, tongKetHiep: tongKet, hiepSoThuTu: hiepAIHienTai.soThuTu };
+    }
+    return { hiepVuaXong: false };
+  }
+
+  const ketQuaThangTrang = useMemo(() => {
+    const nguoiChoi = [
+      { ten: 'Bạn', ca13La: boBaiCuaToi },
+      { ten: 'Đối thủ 1', ca13La: boBaiDoiThu[0] },
+      { ten: 'Đối thủ 2', ca13La: boBaiDoiThu[1] },
+      { ten: 'Đối thủ 3', ca13La: boBaiDoiThu[2] },
+    ];
+    return tinhDiemThangTrangAI(nguoiChoi, ruleset);
+  }, [boBaiCuaToi, boBaiDoiThu, ruleset]);
+
+  // Ghi log khi AI tự động thắng trắng (V4) — CHỈ khi người chơi thực sự
+  // đang ở màn Chơi với AI (trang === 'choiAI' && daChonVan); nếu không,
+  // bộ bài "Bạn" đang giữ trong state chỉ là dữ liệu nền chưa ai xem tới
+  // (App() luôn tính sẵn dù đang ở trang nào khác), ghi log lúc đó sẽ tạo
+  // ra 1 "ván" ma trong lịch sử mà người chơi chưa từng thấy/chơi.
+  const boBaiDaGhiThangTrangRef = useRef(null);
+  useEffect(() => {
+    if (!(trang === 'choiAI' && daChonVan)) return;
+    if (ketQuaThangTrang && boBaiDaGhiThangTrangRef.current !== boBaiCuaToi) {
+      boBaiDaGhiThangTrangRef.current = boBaiCuaToi;
+      const ketQuaLog = ghiVanAIVaoLichSu({
+        nguoiChoiBaiThat: TEN_NGUOI_CHOI.map((ten, i) => ({ ten, ca13La: tatCaBai[i] })),
+        diem: ketQuaThangTrang.diem,
+        laThangTrang: true,
+        loaiThangTrang: ketQuaThangTrang.ketQuaLoai?.find(l => l !== null),
+      });
+      if (ketQuaLog.hiepVuaXong) setKetQuaHiepVuaXong(ketQuaLog);
+    }
+  }, [trang, daChonVan, boBaiCuaToi, tatCaBai, ketQuaThangTrang, hiepAIHienTai]);
+
+  const ketQuaHienTai = ketQuaThangTrang || ketQuaDiem;
+
+  function dieuHuong(trangMoi) {
+    setTrang(trangMoi);
+  }
+
+  // "Dừng chơi": bỏ dở luôn ván đang xếp/xem (không lưu lại gì để chơi
+  // tiếp), về trang chủ. Ván ĐÃ xác nhận/ghi log rồi thì không mất gì —
+  // vẫn còn nguyên trong Hiệp.
+  function dungChoi() {
+    setTrang('trangChu');
+    setDaChonVan(false);
+  }
+
+  function vanTiepTheo() {
+    batDauVanMoi(hiepAIHienTai);
+  }
+
+  function choiTiepHiepMoi() {
+    const dsHiepTuoi = docDanhSach(KHOA_HIEP);
+    const hiepMoi = taoHiepMoi(NGUON, hiepAIHienTai.nguoiChoi);
+    const dsHiepMoi = [...dsHiepTuoi, hiepMoi];
+    ghiDanhSach(KHOA_HIEP, dsHiepMoi);
+    batDauVanMoi(hiepMoi);
   }
 
   function chonPreset(id) {
@@ -225,8 +273,27 @@ function App() {
   const chiDauGoc = oCacChi.slice(0, 3);
   const chiGiuaGoc = oCacChi.slice(3, 8);
   const chiCuoiGoc = oCacChi.slice(8, 13);
-  const hopLe = xepBaiHopLe(chiDauGoc, chiGiuaGoc, chiCuoiGoc, ruleset);
   const vanDaKetThuc = !!(ketQuaThangTrang || (daXacNhan && ketQuaDiem));
+  // Dùng vanDaKetThuc (KHÔNG phải chỉ daXacNhan) để cộng thêm 1 — vì AI tự
+  // động thắng trắng cũng coi là ván đã kết thúc/ghi log rồi, dù daXacNhan
+  // chưa từng được set true trong trường hợp đó. Giới hạn tối đa 12 (đủ
+  // 12 chuyển sang màn tổng kết).
+  const soVanDangHienThi = Math.min(soVanDaXongHienTai + (vanDaKetThuc ? 0 : 1), 12);
+
+  // Phát hiện 1 hiệp AI còn DỞ DANG (chưa đủ 12 ván) từ lần chơi trước, để
+  // màn ChonVan cho phép "Tiếp hiệp cũ". Chỉ tính khi đang ở đúng màn chọn
+  // (chưa vào ván chơi). Đọc thẳng localStorage (không dùng state có thể
+  // cũ), giống cách các hàm ghi log khác đã làm.
+  const hiepAIDoDang = (trang === 'choiAI' && !daChonVan)
+    ? (() => {
+        const dsHiep = docDanhSach(KHOA_HIEP);
+        const dsVan = docDanhSach(KHOA_VAN);
+        const hiep = layHiepDangDoHoacNull(dsHiep, dsVan, NGUON);
+        if (!hiep) return null;
+        const vanCuaHiep = layVanCuaHiep(hiep.id, dsVan);
+        return { ...hiep, soVan: vanCuaHiep.length, tongKet: tinhTongKetHiep(vanCuaHiep) };
+      })()
+    : null;
 
   function onPointerDownLa(e, tuIndex) {
     e.target.setPointerCapture(e.pointerId);
@@ -247,9 +314,13 @@ function App() {
     const x = e.clientX, y = e.clientY;
 
     // Tìm xem đang thả vào đúng Ô nào trong 13 ô, bằng cách so tọa độ thả
-    // với vị trí thật của từng ô trên màn hình
+    // với vị trí thật của từng ô trên màn hình. Duyệt NGƯỢC (12 → 0): các
+    // lá CHỒNG LẤN (overlap) lên nhau trong cùng 1 hàng, lá có index LỚN
+    // HƠN luôn được vẽ ĐÈ LÊN TRÊN (nằm sau trong DOM) — duyệt ngược đảm
+    // bảo ô đang hiện RA NGOÀI CÙNG (trên cùng, dễ thấy) luôn được ưu tiên
+    // khớp trước, đúng với những gì mắt thường nhìn thấy trên màn hình.
     let denIndex = -1;
-    for (let i = 0; i < 13; i++) {
+    for (let i = 12; i >= 0; i--) {
       const rect = refsO.current[i]?.getBoundingClientRect();
       if (isInside(rect, x, y)) { denIndex = i; break; }
     }
@@ -275,7 +346,13 @@ function App() {
       { ten: 'Đối thủ 2', ...baiDoiThu[1] },
       { ten: 'Đối thủ 3', ...baiDoiThu[2] },
     ];
-    setKetQuaDiem(tinhDiem(nguoiChoi, ruleset));
+    const ketQua = tinhDiem(nguoiChoi, ruleset);
+    setKetQuaDiem(ketQua);
+    const ketQuaLog = ghiVanAIVaoLichSu({
+      nguoiChoiBaiThat: nguoiChoi.map(p => ({ ten: p.ten, chiDau: p.chiDau, chiGiua: p.chiGiua, chiCuoi: p.chiCuoi })),
+      diem: ketQua.diem,
+    });
+    if (ketQuaLog.hiepVuaXong) setKetQuaHiepVuaXong(ketQuaLog);
     setDaXacNhan(true);
   }
 
@@ -296,92 +373,86 @@ function App() {
       { ten: 'Đối thủ 3', ...baiDoiThu[2] },
     ];
     const ketQuaDung = tinhDiemBaoUDung(nguoiChoiThangTrang, ruleset);
-    setKetQuaDiem(ketQuaDung || tinhDiemBaoUSai(nguoiChoiThangTrang, ruleset));
+    const baiThatDeGhi = nguoiChoiThangTrang.map(p => ({ ten: p.ten, ca13La: p.ca13La }));
+
+    let ketQuaCuoi, ketQuaLog;
+    if (ketQuaDung) {
+      ketQuaCuoi = ketQuaDung;
+      ketQuaLog = ghiVanAIVaoLichSu({
+        nguoiChoiBaiThat: baiThatDeGhi, diem: ketQuaDung.diem,
+        laThangTrang: true, loaiThangTrang: ketQuaDung.ketQuaLoai?.[0],
+      });
+    } else {
+      ketQuaCuoi = tinhDiemBaoUSai(nguoiChoiThangTrang, ruleset);
+      ketQuaLog = ghiVanAIVaoLichSu({
+        nguoiChoiBaiThat: baiThatDeGhi, diem: ketQuaCuoi.diem,
+        laThangTrang: false, loaiThangTrang: null,
+      });
+    }
+    setKetQuaDiem(ketQuaCuoi);
+    if (ketQuaLog.hiepVuaXong) setKetQuaHiepVuaXong(ketQuaLog);
     setDaXacNhan(true);
   }
 
-  // Vẽ 1 vùng TRONG LÚC ĐANG XẾP (cho phép kéo-thả): hiển thị ĐÚNG theo
-  // vị trí ô gốc trong oCacChi, KHÔNG sort — để mỗi lá luôn gắn đúng với
-  // index thật của nó, đảm bảo kéo-thả luôn chính xác tuyệt đối.
-  function renderVungDangXep(nhan, danhSachGoc, chiSoBatDau) {
+  // Vẽ 1 hàng TRONG LÚC ĐANG XẾP (cho phép kéo-thả): hiển thị ĐÚNG theo vị
+  // trí ô gốc trong oCacChi, KHÔNG sort — để mỗi lá luôn gắn đúng với index
+  // thật của nó, đảm bảo kéo-thả luôn chính xác tuyệt đối. Cùng dùng
+  // TheBaiDon + engine tự co giãn/chồng lấn `.hang-chi-bai` như bài tĩnh,
+  // chỉ khác là mỗi lá có gắn thêm ref (để dò ô thả) + onPointerDown (để
+  // bắt đầu kéo) — kích thước "lon" (to hơn AI) theo đúng yêu cầu.
+  function renderVungDangXep(danhSachGoc, chiSoBatDau) {
     return (
-      <div className="vung-chi">
-        <div className="vung-tieu-de">{nhan}</div>
-        <div className="vung-noi-dung">
-          {danhSachGoc.map((l, i) => {
-            const indexToanCuc = chiSoBatDau + i;
-            return (
-              <div
-                key={indexToanCuc}
-                ref={el => { refsO.current[indexToanCuc] = el; }}
-                style={{ opacity: dragging?.tuIndex === indexToanCuc ? 0.25 : 1 }}
-              >
-                <Card laBai={l} onPointerDown={(e) => onPointerDownLa(e, indexToanCuc)} />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // Vẽ 1 vùng SAU KHI ĐÃ XÁC NHẬN (chỉ xem, không kéo được nữa): tự sắp
-  // xếp lại theo thứ tự cao-thấp cho đẹp mắt. Vì không còn tương tác kéo,
-  // không cần gắn index gốc ở đây — tách hẳn thành hàm riêng để tránh
-  // nhầm lẫn với renderVungDangXep ở trên (2 trạng thái khác nhau hoàn
-  // toàn, không nên dùng chung 1 hàm).
-  function renderVungChiXem(nhan, danhSachGoc) {
-    const daSort = sapXepDeHienThi(danhSachGoc);
-    return (
-      <div className="vung-chi">
-        <div className="vung-tieu-de">{nhan}</div>
-        <div className="vung-noi-dung">
-          {daSort.map(l => (
-            <Card key={`${l.rank}-${l.suit}`} laBai={l} onPointerDown={() => {}} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  function renderRaw13(ten, danhSachLa) {
-    return (
-      <div className="vung-chi">
-        <div className="vung-tieu-de">{ten}</div>
-        <div className="vung-noi-dung">
-          {sapXepDeHienThi(danhSachLa).map(l => (
-            <Card key={`${l.rank}-${l.suit}`} laBai={l} onPointerDown={() => {}} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Hiện bài 1 đối thủ AI theo 3 hàng riêng (Đầu/Giữa/Cuối), đã sắp xếp,
-  // không cho kéo (giữ nguyên từ bản vá trước)
-  function renderBaiDoiThu(doiThu, idx) {
-    return (
-      <div key={idx} className="khoi-doi-thu">
-        <div className="ten-doi-thu">Đối thủ {idx + 1}</div>
-        {[
-          { nhan: 'Đầu', ds: sapXepDeHienThi(doiThu.chiDau) },
-          { nhan: 'Giữa', ds: sapXepDeHienThi(doiThu.chiGiua) },
-          { nhan: 'Cuối', ds: sapXepDeHienThi(doiThu.chiCuoi) },
-        ].map(({ nhan, ds }) => (
-          <div key={nhan} className="vung-chi vung-chi-doi-thu">
-            <div className="vung-tieu-de">{nhan}</div>
-            <div className="vung-noi-dung">
-              {ds.map(l => (
-                <Card
-                  key={`${l.rank}-${l.suit}`}
-                  laBai={l}
-                  onPointerDown={() => {}}
-                  faceDown={!daXacNhan}
-                />
-              ))}
+      <div className="hang-chi-bai hang-chi-bai-lon" style={{ '--n': danhSachGoc.length }}>
+        {danhSachGoc.map((l, i) => {
+          const indexToanCuc = chiSoBatDau + i;
+          return (
+            <div
+              key={indexToanCuc}
+              ref={el => { refsO.current[indexToanCuc] = el; }}
+              style={{ opacity: dragging?.tuIndex === indexToanCuc ? 0.25 : 1 }}
+            >
+              <TheBaiDon laBai={l} onPointerDown={(e) => onPointerDownLa(e, indexToanCuc)} />
             </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Tên + điểm hiển thị ngay dưới mỗi vị trí trên bàn, 2 dòng: tên riêng
+  // 1 dòng, dòng dưới "V: <điểm ván vừa xong> / H: <điểm tích lũy cả
+  // hiệp>". H tính lại trực tiếp từ danh sách Ván thật mỗi lần render
+  // (không cache) — hiện SUỐT quá trình chơi, kể cả khi chưa xong ván
+  // nào. V chỉ hiện khi ván vừa xong đã có kết quả.
+  function renderTenVaDiem(ten) {
+    const tong = tongCongDonHiepHienTai[ten] || 0;
+    const vanDiem = ketQuaHienTai ? ketQuaHienTai.diem[ten] : null;
+    const coVan = vanDiem !== null && vanDiem !== undefined;
+    return (
+      <div className="ten-vi-tri">
+        <div>{ten}</div>
+        {(coVan || hiepAIHienTai) && (
+          <div className="diem-vi-tri">
+            {coVan && (
+              <>V: <b className={vanDiem >= 0 ? 'diem-duong' : 'diem-am'}>{vanDiem > 0 ? '+' : ''}{vanDiem}</b></>
+            )}
+            {coVan && hiepAIHienTai && ' / '}
+            {hiepAIHienTai && (
+              <>H: <b className={tong >= 0 ? 'diem-duong' : 'diem-am'}>{tong > 0 ? '+' : ''}{tong}</b></>
+            )}
           </div>
-        ))}
+        )}
+      </div>
+    );
+  }
+
+  function renderViTriDoiThu(ten, doiThu) {
+    return (
+      <div>
+        {renderTenVaDiem(ten)}
+        <HangBai danhSachLa={doiThu.chiDau} faceDown={!vanDaKetThuc} kichThuoc="nho" />
+        <HangBai danhSachLa={doiThu.chiGiua} faceDown={!vanDaKetThuc} kichThuoc="nho" />
+        <HangBai danhSachLa={doiThu.chiCuoi} faceDown={!vanDaKetThuc} kichThuoc="nho" />
       </div>
     );
   }
@@ -413,83 +484,101 @@ function App() {
         </>
       )}
 
+      {trang === 'ghiDiem' && (
+        <>
+          <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
+            ← Trang chủ
+          </button>
+          <GhiDiem />
+        </>
+      )}
+
+      {trang === 'lichSu' && (
+        <>
+          <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
+            ← Trang chủ
+          </button>
+          <LichSu />
+        </>
+      )}
+
       {trang === 'choiAI' && !daChonVan && (
-        <ChonVan
-          coVanDaLuu={coVanDaLuu}
-          onChonTiep={chonChoiTiep}
-          onChonMoi={chonVanMoi}
-        />
+        <>
+          <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
+            ← Trang chủ
+          </button>
+          <ChonVan
+            hiepDoDang={hiepAIDoDang}
+            onChonTiepHiep={chonTiepHiepDoDang}
+            onChonHiepMoi={chonHiepMoi}
+          />
+        </>
       )}
 
       {trang === 'choiAI' && daChonVan && (
         <>
-          <h1>Chinese Poker</h1>
-          <div className="hang-nut-dieu-khien">
-            <button className="nut-dung-choi" onClick={dungChoi}>⏸ Dừng chơi</button>
-            {vanDaKetThuc && (
-              <button className="nut-choi-tiep" onClick={chonVanMoi}>🆕 Chơi ván mới</button>
-            )}
-          </div>
-          {ketQuaThangTrang ? (
-            <>
-              <div className="banner-thang-trang">
-                🎉 Ù ngay! {ketQuaThangTrang.ketQuaLoai
-                  .map((loai, i) => loai ? `${TEN_NGUOI_CHOI[i]}: ${TEN_THANG_TRANG_HIEN_THI[loai]}` : null)
-                  .filter(Boolean)
-                  .join(' — ')}
-              </div>
-              {renderRaw13('Bạn', boBaiCuaToi)}
-              {boBaiDoiThu.map((ds, idx) => renderRaw13(`Đối thủ ${idx + 1}`, ds))}
-            </>
-          ) : (
-            !daXacNhan && (
-              <p style={{ textAlign: 'center', opacity: 0.7, fontSize: 13 }}>
-                Kéo 2 lá để đổi chỗ cho nhau, sắp xếp theo ý bạn
-              </p>
-            )
-          )}
+          <h1>Chơi với AI</h1>
 
-          {!ketQuaThangTrang && (
-            <>
-              {daXacNhan ? (
+          <div className="ban-choi ban-choi-tron">
+            <div className="vi-tri-12h">{renderViTriDoiThu('Đối thủ 2', baiDoiThu[1])}</div>
+            <div className="vi-tri-9h">{renderViTriDoiThu('Đối thủ 1', baiDoiThu[0])}</div>
+            <div className="vi-tri-3h">{renderViTriDoiThu('Đối thủ 3', baiDoiThu[2])}</div>
+
+            <div className="vi-tri-6h">
+              {renderTenVaDiem('Bạn')}
+              {ketQuaThangTrang ? (
+                <HangBai danhSachLa={boBaiCuaToi} kichThuoc="lon" />
+              ) : !daXacNhan ? (
                 <>
-                  {renderVungChiXem('Chi Đầu (3 lá)', chiDauGoc)}
-                  {renderVungChiXem('Chi Giữa (5 lá)', chiGiuaGoc)}
-                  {renderVungChiXem('Chi Cuối (5 lá)', chiCuoiGoc)}
+                  {renderVungDangXep(chiDauGoc, BAT_DAU.dau)}
+                  {renderVungDangXep(chiGiuaGoc, BAT_DAU.giua)}
+                  {renderVungDangXep(chiCuoiGoc, BAT_DAU.cuoi)}
                 </>
               ) : (
                 <>
-                  {renderVungDangXep('Chi Đầu (3 lá)', chiDauGoc, BAT_DAU.dau)}
-                  {renderVungDangXep('Chi Giữa (5 lá)', chiGiuaGoc, BAT_DAU.giua)}
-                  {renderVungDangXep('Chi Cuối (5 lá)', chiCuoiGoc, BAT_DAU.cuoi)}
+                  <HangBai danhSachLa={chiDauGoc} kichThuoc="lon" />
+                  <HangBai danhSachLa={chiGiuaGoc} kichThuoc="lon" />
+                  <HangBai danhSachLa={chiCuoiGoc} kichThuoc="lon" />
                 </>
               )}
+            </div>
 
-              <p className={hopLe ? 'thong-bao-hop-le' : 'thong-bao-loi'}>
-                {hopLe ? 'Hợp lệ — sẵn sàng!' : 'Binh lủng!'}
+            <div className="khu-giua-ban">
+              <p className="ghi-chu-luat" style={{ textAlign: 'center', margin: 0 }}>
+                {ketQuaHiepVuaXong ? 'Hết hiệp' : hiepAIHienTai && `Hiệp ${hiepAIHienTai.soThuTu} — Ván ${soVanDangHienThi}/12`}
               </p>
-
-              {!daXacNhan && (
-                <div className="hang-nut-xep-bai">
-                  <button className="nut-xac-nhan" onClick={xacNhanBai}>Xác nhận bài</button>
-                  <button className="nut-bao-u" onClick={moHopThoaiBaoU}>📣 Báo Ù</button>
+              {ketQuaThangTrang && (
+                <div className="banner-thang-trang">
+                  🎉 Ù ngay! {ketQuaThangTrang.ketQuaLoai
+                    .map((loai, i) => loai ? `${TEN_NGUOI_CHOI[i]}: ${TEN_THANG_TRANG_HIEN_THI[loai]}` : null)
+                    .filter(Boolean)
+                    .join(' — ')}
                 </div>
               )}
-            </>
-          )}
+              <div className="hang-nut-choi">
+                {ketQuaHiepVuaXong ? (
+                  <>
+                    <button className="nut-choi" onClick={choiTiepHiepMoi}>Chơi tiếp</button>
+                    <button className="nut-choi" onClick={dungChoi}>Dừng</button>
+                  </>
+                ) : vanDaKetThuc ? (
+                  <>
+                    <button className="nut-choi" onClick={dungChoi}>Dừng</button>
+                    <button className="nut-choi" onClick={vanTiepTheo}>Tiếp</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="nut-choi" onClick={dungChoi}>Dừng</button>
+                    <button className="nut-choi" onClick={xacNhanBai}>Xác nhận bài</button>
+                    <button className="nut-choi" onClick={moHopThoaiBaoU}>Báo Ù</button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
           {(ketQuaThangTrang || (daXacNhan && ketQuaDiem)) && (
             <div className="ket-qua">
-              <h2>Kết quả</h2>
-              <p className="ghi-chu-luat">
-                Tính theo luật "{tatCaPreset.find(p => p.id === presetId)?.ten}"
-                {daTuyChinh ? ' (đã chỉnh tay)' : ''} — điểm gốc {ruleset.pointsPerChi.dau}/
-                {ruleset.pointsPerChi.giua}/{ruleset.pointsPerChi.cuoi} (Đầu/Giữa/Cuối)
-              </p>
-              {Object.entries(ketQuaHienTai.diem).map(([ten, d]) => (
-                <p key={ten}>{ten}: <b className={d >= 0 ? 'diem-duong' : 'diem-am'}>{d > 0 ? '+' : ''}{d}</b></p>
-              ))}
-
               <button className="nut-xem-giai-trinh" onClick={() => setHienGiaiTrinh(v => !v)}>
                 {hienGiaiTrinh ? 'Ẩn cách tính chi tiết' : 'Xem cách tính chi tiết'}
               </button>
@@ -517,13 +606,9 @@ function App() {
 
           {dragging && (
             <div className="la-bai-dang-keo" style={{ left: dragging.x - 28, top: dragging.y - 38 }}>
-              <Card laBai={dragging.laBai} onPointerDown={() => {}} />
+              <TheBaiDon laBai={dragging.laBai} />
             </div>
           )}
-
-          <hr />
-          <h2>Bài của 3 đối thủ (AI đã xếp)</h2>
-          {baiDoiThu.map((doiThu, idx) => renderBaiDoiThu(doiThu, idx))}
 
           {dangXacNhanBaoU && (
             <div className="lop-phu-xac-nhan">
