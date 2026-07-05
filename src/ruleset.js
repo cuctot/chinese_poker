@@ -5,27 +5,6 @@
 
 export const RULESET_PRESETS = [
   {
-    id: 'toi_gian',
-    ten: 'Tối giản',
-    moTa: 'Chỉ +1/-1 mỗi chi, không thưởng bài đặc biệt, không tính chi Á.',
-    ruleset: {
-      version: 6,
-      pointsPerChi: { dau: 1, giua: 1, cuoi: 1 },
-      bonusTheoLoai: { dau: {}, cuoi: {} },
-      sapBonus: { enabled: true, multiplier: 2 },
-      sapLangBonus: { enabled: true, multiplier: 2 },
-      binhLungPenalty: { enabled: true, countAsSap: true },
-      sanhHaYeuNhat: false,
-      diemA: { enabled: false, diem: 0 },
-      thangTrang: {
-        enabled: false,
-        dungMucSapLang: false,
-        phatBaoUSai: 6,
-        diem: { rongCuon: 24, sanhRong: 12, namDoiMotSam: 6, lucPheBon: 6, namDoiThong: 6, baThung: 6, baSanh: 6 },
-      },
-    },
-  },
-  {
     id: 'chuan',
     ten: 'Chuẩn (phổ biến nhất)',
     moTa: 'Sám cô chi Đầu +3 (Sám A +12). Chi Cuối: Tứ quý +4 (Tứ quý A +16), Thùng phá sảnh +5 (Thượng +10, Hạ +7). Chi Giữa tự động = 2x Chi Cuối. Ăn sập x2, sập làng x2 nữa. Chi Á: 1 điểm/lá.',
@@ -52,7 +31,7 @@ export const RULESET_PRESETS = [
 ];
 
 export function timPreset(id) {
-  return RULESET_PRESETS.find(p => p.id === id) || RULESET_PRESETS[1];
+  return RULESET_PRESETS.find(p => p.id === id) || RULESET_PRESETS.find(p => p.id === 'chuan') || RULESET_PRESETS[0];
 }
 
 export function layRulesetTuPreset(id) {

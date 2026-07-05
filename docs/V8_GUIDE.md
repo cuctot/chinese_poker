@@ -1600,3 +1600,35 @@ không cần cấu hình thêm. Áp dụng tương tự cho `preview` (chạy th
 production qua `npm run build && npm run preview`). Lưu ý: lần đầu chạy,
 macOS có thể hỏi quyền cho phép Node nhận kết nối mạng đến (System
 Settings → Privacy & Security → Firewall) — cần bấm Allow.
+
+---
+
+## Bỏ preset luật "Tối giản"
+
+`src/ruleset.js` — xóa hẳn preset `id: 'toi_gian'` (`+1/-1` mỗi chi,
+không thưởng bài đặc biệt, không tính chi Á) khỏi `RULESET_PRESETS` —
+Huy xác nhận không cần dùng, chỉ giữ lại "Chuẩn (phổ biến nhất)".
+
+**Chỉnh kèm để tránh lỗi tiềm ẩn:** `timPreset()` có fallback cứng
+`RULESET_PRESETS[1]` — khi "Tối giản" (index 0) bị xóa, "Chuẩn" trở
+thành index 0 duy nhất, `RULESET_PRESETS[1]` sẽ là `undefined`. Sửa lại
+fallback tìm ĐÚNG theo id thay vì đoán theo vị trí trong mảng:
+
+```js
+export function timPreset(id) {
+  return RULESET_PRESETS.find(p => p.id === id) || RULESET_PRESETS.find(p => p.id === 'chuan') || RULESET_PRESETS[0];
+}
+```
+
+`timPresetTrongDanhSach` (`App.jsx`, dùng cho `chonPreset`/
+`resetVeGocPreset`) đã có sẵn fallback tương tự từ trước, không cần
+sửa. Ai đã lỡ lưu `presetId: 'toi_gian'` vào `localStorage` từ trước
+(rất hiếm, chỉ Huy tự test) vẫn dùng được ruleset đó bình thường (dữ
+liệu ruleset vẫn còn nguyên trong `localStorage`), chỉ mất tên hiển thị
+đúng — không xử lý migration riêng vì phạm vi ảnh hưởng cực nhỏ.
+
+### Kiểm tra
+
+Đã kiểm thử bằng Playwright: trang Luật chơi giờ chỉ liệt kê đúng 1
+preset "Chuẩn (phổ biến nhất)", không còn chữ "Tối giản" ở đâu trên
+trang; build/lint sạch.
