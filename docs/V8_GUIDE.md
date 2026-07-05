@@ -1140,3 +1140,463 @@ nhập — không cần chiếm nhiều chỗ dọc như bàn chơi thật (có 
    chung `HangBai`/`TheBaiDon`, không còn dùng `Card.jsx` (đã xóa file).
 8. Màn chơi hiện đúng tiêu đề "Chơi với AI" (không còn "Chinese Poker"),
    không còn dòng gợi ý "Kéo 2 lá...", nút bấm đúng "Dừng"/"Tiếp".
+
+---
+
+## Phase 8 — Bàn tròn tối ưu chỗ (hình chữ thập full-width + chồng lấn dọc)
+
+Sau khi Huy test Phase 7 trên iPhone THẬT (không phải giả lập), phát hiện
+2 vấn đề bố cục nghiêm trọng mà lúc test ở giả lập không thấy hết:
+Đối thủ 1/3 (2 cột bên) quá hẹp không đọc nổi, và bài "Bạn" có lúc co
+rúm lại thành 1 chấm nhỏ.
+
+### 1. Lỗi "Bạn" co rúm — `align-items: center` kế thừa nhầm
+
+Bố cục thử đầu tiên (chuyển tạm sang xếp DỌC hoàn toàn, 1 cột) bị lỗi:
+mọi vị trí co lại đúng bằng kích thước NỘI DUNG thay vì giãn hết bề
+rộng màn hình. Dò bằng `getBoundingClientRect()` trong Playwright phát
+hiện `.vi-tri-6h` chỉ rộng **25px** dù khung cha rộng 356px.
+
+**Nguyên nhân:** `.ban-choi` (class gốc, dùng chung cho cả bố cục lưới
+cũ) có sẵn `align-items: center` — khi đổi `display` sang `flex` cho bố
+cục mới, thuộc tính này VẪN CÒN HIỆU LỰC (2 class cùng gắn trên 1 phần
+tử, thuộc tính không bị override thì vẫn giữ nguyên từ class kia). Với
+`flex-direction: column`, `align-items` điều khiển trục NGANG —
+`center` nghĩa là mỗi vị trí tự co theo đúng kích thước nội dung
+(shrink-to-fit) thay vì giãn hết (`stretch`, giá trị mặc định). Sửa
+bằng cách khai báo đè `align-items: stretch` trên chính class bố cục
+mới.
+
+### 2. Bố cục CUỐI CÙNG — hình chữ thập, chỉ hàng giữa chia đôi
+
+Bố cục xếp dọc hoàn toàn (1 cột) tuy đọc rõ nhưng KHÔNG còn ra hình bàn
+tròn nữa — Huy muốn giữ đúng hình chữ thập nhưng vẫn phải đủ chỗ đọc.
+Nhận ra vấn đề gốc: bản gốc Phase 6 dùng CHUNG `1fr 2fr 1fr` cho CẢ 3
+hàng, khiến Đối thủ 2/Bạn (ở cột giữa) cũng chỉ có 50% bề rộng dù
+KHÔNG cần chia sẻ với ai trong hàng của mình — chỉ có hàng giữa (Đối
+thủ 1 + Đối thủ 3) mới thực sự cần chia cột.
+
+**Giải pháp:** dùng `grid-template-areas` để mỗi HÀNG tự quyết định
+cách chia cột riêng, không phụ thuộc hàng khác:
+
+```css
+.ban-choi-tron {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "doiThu2 doiThu2"
+    "doiThu1 doiThu3"
+    "ban ban"
+    "khuGiua khuGiua";
+  gap: 14px;
+  align-items: start;
+}
+.ban-choi-tron .vi-tri-12h { grid-area: doiThu2; }
+.ban-choi-tron .vi-tri-9h  { grid-area: doiThu1; }
+.ban-choi-tron .vi-tri-3h  { grid-area: doiThu3; }
+.ban-choi-tron .khu-giua-ban { grid-area: khuGiua; }
+.ban-choi-tron .vi-tri-6h  { grid-area: ban; }
+```
+
+**Giải thích:** hàng trên (Đối thủ 2) và hàng dưới (Bạn) giờ chiếm
+TRỌN bề rộng màn hình (100%); chỉ hàng giữa (Đối thủ 1 + Đối thủ 3)
+mới chia đôi 50/50 — GẤP ĐÔI bề rộng so với 25% trước đây. Vì dùng
+`grid-area` (đặt trên selector CÓ 2 class `.ban-choi-tron .vi-tri-Xh`,
+đặc hiệu hơn selector gốc `.vi-tri-Xh` 1 class) nên tự động THẮNG các
+luật `grid-column`/`grid-row` cũ mà không cần xóa — 2 bố cục
+(`.ban-choi` lưới cũ dùng cho `ChonVan`/preview, và `.ban-choi-tron`
+mới dùng cho màn chơi thật + màn nhập tên Ghi điểm) cùng tồn tại không
+xung đột.
+
+Khu thông báo/nút (`.khu-giua-ban`) đặt SAU bài Bạn (đúng hàng cuối
+`"khuGiua khuGiua"`) — Huy phản hồi Phase 7 rằng đặt kẹp giữa 3 đối thủ
+không còn hợp lý nữa (khi Đối thủ 1/3 đã đứng cạnh nhau, không còn
+khoảng trống ở giữa để đặt), đặt dưới bài Bạn cũng thuận tay hơn vì gần
+các nút bấm ngay khi vừa xếp xong.
+
+### 3. Chồng lấn CẢ GIỮA CÁC HÀNG chi (không chỉ giữa các lá 1 hàng)
+
+Yêu cầu thêm: tiết kiệm chỗ CHIỀU DỌC bằng cách cho hàng SAU (vd chi
+Giữa) đè lên CHÂN của hàng TRƯỚC (chi Đầu), giống hệt cách các lá TRONG
+1 hàng đã đè lên nhau từ Phase 7.
+
+```css
+.hang-chi-bai + .hang-chi-bai {
+  margin-top: calc(-1 * var(--w) * 0.55);
+}
+```
+
+**Giải thích:** chọn theo tổ hợp `+` (adjacent sibling) nên CHỈ áp dụng
+cho `.hang-chi-bai` đứng NGAY SAU 1 `.hang-chi-bai` khác (tức chi Giữa
+sau chi Đầu, chi Cuối sau chi Giữa) — hàng ĐẦU TIÊN của mỗi vị trí
+không bị kéo lên. Dùng `calc(-1 * var(--w) * 0.55)` (55% BỀ RỘNG lá,
+không phải px cố định) để tỉ lệ chồng lấn luôn nhất quán bất kể lá to
+(`hang-chi-bai-lon`) hay nhỏ (mặc định) — vì chiều cao lá tỉ lệ thuận
+với chiều rộng qua `aspect-ratio: 0.68` đã có sẵn. Không cần khai báo
+`z-index` — hàng SAU luôn nằm SAU trong DOM nên tự động vẽ ĐÈ LÊN TRÊN
+hàng trước, chỉ số góc trên-trái của MỌI lá (kể cả lá hàng trên bị che
+chân) vẫn luôn lộ ra vì hàng sau chỉ đè từ DƯỚI lên.
+
+Test thả bài (`onPointerUp`, đã đảo thứ tự dò 12→0 từ Phase 7) tiếp tục
+hoạt động đúng với chồng lấn dọc — vì logic "index lớn hơn = vẽ đè lên
+trên = ưu tiên khớp trước" áp dụng chung cho MỌI cặp lá chồng lấn, bất
+kể chồng lấn ngang (cùng hàng) hay dọc (khác hàng, khác chi).
+
+### Kiểm tra Phase 8
+
+Đã kiểm thử bằng Playwright, giả lập đúng thiết bị `iPhone 13` (không
+chỉ đặt viewport suông — dùng `devices['iPhone 13']` của Playwright để
+khớp user-agent/pixel ratio thật):
+1. `.vi-tri-6h`/`.vi-tri-9h` đo được đúng ~356px/~170px (gần full/nửa
+   bề rộng màn hình), không còn co rúm 25px.
+2. Mọi hàng bài (kể cả sau khi chồng lấn dọc) vẫn đúng 1 dòng ngang duy
+   nhất — không hàng nào bị xuống dòng.
+3. Kéo lá đầu đổi chỗ lá cuối trong 1 hàng ĐÃ bị hàng sau đè lên chân —
+   vẫn đổi đúng lá, không lệch.
+4. Khu thông báo + nút bấm hiện đúng SAU bài Bạn (thứ tự DOM:
+   `vi-tri-12h, vi-tri-9h, vi-tri-3h, vi-tri-6h, khu-giua-ban`).
+
+---
+
+## Phase 9 — Lịch sử dạng bảng (nhóm theo roster, expand xem Ván)
+
+Huy phản hồi: muốn Lịch sử hiện dạng BẢNG (giống Ghi điểm) thay vì danh
+sách thẻ (card list) như Phase 4 — có cột Thời gian/Hiệp/tên từng
+người; hiệp liên tiếp CÙNG người chơi (cùng tên VÀ cùng thứ tự) thì gộp
+chung 1 bảng, mỗi hiệp mới thêm 1 dòng; đổi người thì bắt đầu bảng mới;
+bấm vào 1 hiệp thì expand ngay dưới ra bảng Ván (cùng định dạng cột);
+xem lại bài Chơi AI theo ĐÚNG bố cục bàn tròn dùng lúc chơi thay vì
+liệt kê dọc.
+
+### 1. Nhóm Hiệp liên tiếp cùng roster thành 1 bảng
+
+```js
+function nhomHiepThanhBang(danhSachHiepNguon) {
+  const daSapXep = [...danhSachHiepNguon].sort((a, b) => a.soThuTu - b.soThuTu);
+  const nhom = [];
+  for (const hiep of daSapXep) {
+    const nhomCuoi = nhom[nhom.length - 1];
+    const cungRoster = nhomCuoi
+      && nhomCuoi.nguoiChoi.length === hiep.nguoiChoi.length
+      && nhomCuoi.nguoiChoi.every((t, i) => t === hiep.nguoiChoi[i]);
+    if (cungRoster) nhomCuoi.hieps.push(hiep);
+    else nhom.push({ nguoiChoi: hiep.nguoiChoi, hieps: [hiep] });
+  }
+  return nhom;
+}
+```
+
+**Giải thích:** so sánh MẢNG `nguoiChoi` theo TỪNG PHẦN TỬ ĐÚNG VỊ TRÍ
+(`every((t, i) => t === hiep.nguoiChoi[i])`), không phải so tập hợp —
+đổi THỨ TỰ ngồi (dù cùng 4 tên) cũng coi là roster khác, tách bảng mới,
+đúng yêu cầu "cùng tên VÀ cùng thứ tự". Chạy trên danh sách ĐÃ SẮP XẾP
+theo `soThuTu` tăng dần để đảm bảo tính "liên tiếp theo thời gian"
+đúng nghĩa.
+
+### 2. Bảng lồng nhau — expand Hiệp ra Ván, CÙNG 1 định dạng cột
+
+```jsx
+function renderBangHiep(bang) {
+  return (
+    <table className="bang-diem bang-diem-lichsu">
+      <thead>
+        <tr><th>Thời gian</th><th>Hiệp</th>{bang.nguoiChoi.map(ten => <th key={ten}>{ten}</th>)}</tr>
+      </thead>
+      <tbody>
+        {bang.hieps.map(hiep => (
+          <Fragment key={hiep.id}>
+            <tr onClick={() => moRongVan(hiep.id)}>
+              <td>{dinhDangGioNgay(hiep.batDau)}</td>
+              <td>#{hiep.soThuTu}{!daXong && ' (dở)'}</td>
+              {/* ...điểm tổng cả hiệp mỗi người... */}
+            </tr>
+            {dangMoRong && (
+              <tr><td colSpan={2 + bang.nguoiChoi.length} style={{ padding: 0 }}>
+                {renderBangVan(hiep, vanCuaHiep)}
+              </td></tr>
+            )}
+          </Fragment>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+```
+
+**Giải thích:** dùng `Fragment` (import từ `react`, CẦN `key` đặt trên
+chính `Fragment` chứ không phải thẻ con bên trong — lỗi hay gặp nếu
+dùng cú pháp rút gọn `<>...</>` vì cú pháp đó KHÔNG nhận `key`) để trả
+về 2 `<tr>` liền nhau (dòng Hiệp + dòng expand) từ 1 lần `.map()` mà
+không cần bọc thêm `<tbody>`/`<div>` phá vỡ cấu trúc bảng. `renderBangVan`
+dùng LẠI đúng cấu trúc cột "Thời gian | Ván | tên..." (chỉ đổi nhãn cột
+2), thêm class `bang-diem-con` (viền trái + thụt lề nhẹ) để phân biệt
+trực quan đây là bảng CON của dòng Hiệp phía trên. Với tab "Chơi với
+AI", bấm vào 1 dòng Ván trong bảng con mở đúng màn xem lại bài
+(`vanAIDangXem`) như trước.
+
+CSS mới (khớp cột đầu "Thời gian" dài hơn "Ván", không dùng
+`width: 36px` cố định của `:first-child` vốn để dành cho cột "Ván" 1-2
+chữ số bên Ghi điểm):
+
+```css
+.bang-diem-lichsu td:first-child,
+.bang-diem-lichsu th:first-child {
+  width: auto;
+  color: rgba(255,255,255,0.6);
+  font-weight: normal;
+}
+.bang-diem-con {
+  margin: 4px 0 4px 10px;
+  width: calc(100% - 10px);
+  border-left: 3px solid rgba(240,192,64,0.4);
+}
+```
+
+### 3. Xem lại bài Chơi AI đúng bố cục bàn tròn
+
+```jsx
+<div className="ban-choi ban-choi-tron">
+  <div className="vi-tri-12h">{renderMotNguoi('Đối thủ 2', 'nho')}</div>
+  <div className="vi-tri-9h">{renderMotNguoi('Đối thủ 1', 'nho')}</div>
+  <div className="vi-tri-3h">{renderMotNguoi('Đối thủ 3', 'nho')}</div>
+  <div className="vi-tri-6h">{renderMotNguoi('Bạn', 'lon')}</div>
+</div>
+```
+
+**Giải thích:** dùng LẠI đúng class `.ban-choi-tron` từ Phase 8 (không
+tạo bố cục riêng) — tìm bài mỗi người bằng
+`van.nguoiChoiBaiThat.find(p => p.ten === ten)` (theo TÊN, không theo
+vị trí trong mảng) để không phụ thuộc thứ tự lưu trong dữ liệu cũ. Mỗi
+người hiện kèm điểm RIÊNG của ván đó ngay cạnh tên (`van.diem[ten]`),
+đồng bộ cách hiển thị với màn chơi thật.
+
+### 4. Bỏ HẲN mọi bộ lọc trong Lịch sử
+
+Ban đầu chỉ bỏ lọc theo tên ("chuyển sang phần Phân tích"), sau đó Huy
+yêu cầu bỏ nốt lọc theo ngày và chú thích — Lịch sử giờ chỉ còn 2 tab
+(Bài thật/Chơi AI) + danh sách bảng, không còn khối "Lọc" nào. State
+`locNgay`/`locTen`/`locChuThich` và hàm `hiepKhopBoLoc` bị xóa hẳn
+(không giữ lại code chết) — `cacBang` giờ chỉ còn nhóm + đảo ngược,
+không còn bước lọc:
+
+```js
+const hiepDungTab = danhSachHiep.filter(h => h.nguon === tabDangXem);
+const cacBang = nhomHiepThanhBang(hiepDungTab).reverse();
+```
+
+### Kiểm tra Phase 9
+
+Đã kiểm thử bằng Playwright (bơm thẳng dữ liệu giả vào `localStorage`
+để dựng nhanh nhiều Hiệp/Ván mà không cần chơi/nhập tay hàng trăm lần):
+1. 3 Hiệp liên tiếp, 2 hiệp đầu CÙNG roster + 1 hiệp cuối ĐỔI 1 người —
+   hiện đúng 2 bảng riêng (bảng mới nhất trước): 1 dòng (hiệp đổi
+   người) và 2 dòng (2 hiệp cùng roster).
+2. Bấm dòng Hiệp có 12 Ván — expand đúng 12 dòng Ván bên dưới, tổng
+   điểm mỗi người khớp phép cộng thủ công.
+3. Tab Chơi AI: bấm Hiệp → bấm Ván → hiện đúng bài cả 4 người theo bố
+   cục bàn tròn, đúng 52 lá (13×4).
+4. Không còn ô input/nút "Lọc" nào trên trang.
+
+---
+
+## Phase 10 — Ghi điểm: bàn tròn cho nhập tên, chọn người chia tự do,
+## cột Thời gian tự động theo lúc gõ
+
+### 1. Bàn tròn cho màn nhập tên — nhất quán với màn chơi thật
+
+Đổi từ class `.ban-choi-nhap-ten` (bố cục lưới cũ, RÚT GỌN) sang dùng
+LẠI đúng `.ban-choi-tron` của Phase 8 — màn nhập tên giờ có ô nhập RỘNG
+HƠN (ăn theo bề rộng đầy đủ ở hàng trên/dưới), đồng bộ hình dáng bàn
+tròn với màn chơi thật thay vì 1 bố cục thu nhỏ riêng.
+
+### 2. Chọn TỰ DO người chia đầu tiên — không còn ngầm định vị trí 6h
+
+Trước đây vị trí 6h LUÔN được gán nhãn "Chia đầu tiên" — Huy muốn tách
+biệt "ngồi ở đâu" và "ai chia trước", chọn tự do qua dropdown:
+
+```jsx
+const [nguoiChiaDauIdx, setNguoiChiaDauIdx] = useState(0);
+...
+<select value={nguoiChiaDauIdx} onChange={e => setNguoiChiaDauIdx(Number(e.target.value))}>
+  {tenNguoiChoi.map((ten, idx) => (
+    <option key={idx} value={idx}>{ten.trim() || `Vị trí ${idx + 1}`}</option>
+  ))}
+</select>
+```
+
+Lúc bấm "Bắt đầu", XOAY VÒNG danh sách để bắt đầu ĐÚNG từ người được
+chọn, nhưng vẫn giữ nguyên CHIỀU xoay vòng theo vị trí ngồi:
+
+```js
+const thuTuXoayVong = [0, 1, 2, 3].map(i => tenSach[(nguoiChiaDauIdx + i) % 4]);
+const hiepMoi = taoHiepMoi(NGUON, thuTuXoayVong, chuThich.trim());
+```
+
+**Giải thích:** vd chọn "Vị trí 3" chia trước → thứ tự chia thành
+Vị trí 3 → 4 → 1 → 2 (đúng chiều kim đồng hồ tính từ chỗ ngồi đó), KHÔNG
+phải chọn 3 rồi nhảy lại về 1 → 2 → 3 → 4. Nhãn mỗi ô nhập đổi thành
+"Vị trí N" đồng nhất (bỏ nhãn đặc biệt "Chia đầu tiên" cho vị trí 0).
+
+### 3. Bảng điểm thêm cột "Thời gian" — cùng định dạng Lịch sử
+
+```jsx
+<table className="bang-diem bang-diem-lichsu">
+  <thead>
+    <tr><th>Thời gian</th><th>Ván</th>{...tên...}</tr>
+  </thead>
+  ...
+</table>
+```
+
+Dùng lại đúng class `bang-diem-lichsu` từ Phase 9 để cột "Thời gian"
+không bị ép `width: 36px` (vốn để dành cho cột "Ván" ngắn).
+
+### 4. Mốc thời gian TỰ ĐỘNG — ghi đúng lúc gõ, không phải lúc bấm Lưu
+
+Yêu cầu cụ thể của Huy: Hiệp (và ngầm định luôn cả Ván 1) bắt đầu ghi
+nhận vào ĐÚNG lúc bấm "Bắt đầu" (đã đúng sẵn từ trước — `taoHiepMoi` ghi
+`batDau: Date.now()` ngay lúc gọi); nhưng THỜI ĐIỂM của TỪNG VÁN
+(`van.thoiGian`) phải là lúc SỐ ĐẦU TIÊN của ván đó được gõ vào, KHÔNG
+phải lúc bấm "Lưu ván này" — vì gõ đủ 4 số có thể mất vài chục giây,
+ghi lúc bấm Lưu sẽ SAI LỆCH so với lúc ván đó THỰC SỰ vừa đánh xong.
+
+```js
+const [thoiDiemBatDauNhapVan, setThoiDiemBatDauNhapVan] = useState(null);
+
+function suaDiemNhap(ten, gtri) {
+  setDiemNhap(prev => ({ ...prev, [ten]: gtri }));
+  setThoiDiemBatDauNhapVan(prev => prev ?? Date.now());
+}
+```
+
+**Giải thích:** dùng `prev ?? Date.now()` (chỉ set nếu ĐANG là `null`)
+để CHỈ lần gõ ĐẦU TIÊN (dù gõ vào ô của người nào trong 4 người) mới ghi
+mốc — các lần gõ/sửa sau đó (kể cả xóa đi gõ lại) không ghi đè nữa. Mốc
+này hiện SỐNG ngay trên ô "Thời gian" của dòng đang nhập (hiện `—` nếu
+chưa gõ gì). Lúc `luuVan()`, dùng mốc đã ghi thay vì `Date.now()` mới:
+
+```js
+const vanMoi = taoVanMoi({
+  ...,
+  thoiGian: thoiDiemBatDauNhapVan ?? Date.now(),
+});
+```
+
+`moDiemRong()` (hàm dùng chung mỗi khi bắt đầu 1 ván mới — sau khi lưu,
+sau khi bắt đầu hiệp mới, sau khi tiếp tục hiệp dở...) reset luôn
+`thoiDiemBatDauNhapVan` về `null`, sẵn sàng bắt mốc mới cho ván kế tiếp.
+
+`taoVanMoi` (`lichSuChoi.js`) đổi để NHẬN sẵn `thoiGian` (ghi đè), mặc
+định vẫn `Date.now()` nếu không truyền — không phá cách gọi cũ từ
+`App.jsx` (Chơi AI không cần cơ chế này, ván AI luôn ghi log ngay lúc
+vừa xác nhận/thắng trắng, không có độ trễ gõ tay):
+
+```js
+export function taoVanMoi({ ..., thoiGian }) {
+  return { ..., thoiGian: thoiGian ?? Date.now(), ... };
+}
+```
+
+### Kiểm tra Phase 10
+
+Đã kiểm thử bằng Playwright (giả lập gõ số ĐẦU TIÊN, đợi ~1.5-2.5 giây
+rồi mới gõ tiếp/bấm Lưu, để bắt lỗi "ghi nhầm giờ lúc bấm nút"):
+1. Bố cục nhập tên đúng hình bàn tròn `.ban-choi-tron`.
+2. Dropdown liệt kê đúng 4 tên vừa nhập; chọn 1 người bất kỳ (không
+   phải Vị trí 1) rồi bấm "Bắt đầu" — bảng điểm + dòng "người chia" đều
+   đúng bắt đầu từ người đó, thứ tự xoay vòng đúng chiều ngồi.
+3. Ô "Thời gian" của dòng đang nhập hiện `—` trước khi gõ; hiện đúng
+   giờ:phút ngay sau ký tự ĐẦU TIÊN.
+4. Sau khi lưu (trễ ~2.5s so với lúc gõ đầu), thời gian ván đã lưu KHỚP
+   với lúc gõ đầu, KHÔNG lệch theo lúc bấm nút "Lưu ván này".
+
+---
+
+## Sửa lỗi (không thuộc phase UI, tách riêng để dễ tra cứu)
+
+### Lỗi 1 — `xepBaiHopLe` chỉ so HẠNG, bỏ lọt trường hợp cùng hạng khác
+### điểm giữa Đầu và Giữa
+
+**Triệu chứng:** Huy chụp ảnh 1 ván AI có Đầu = đôi Á (AA9), Giữa =
+đôi Q (QQ976) — đôi Á RÕ RÀNG mạnh hơn đôi Q nên đây là LỦNG (Đầu phải
+yếu hơn hoặc bằng Giữa), nhưng ván vẫn tính điểm bình thường như thể
+hợp lệ.
+
+**Nguyên nhân** (`src/cardEngine.js`, hàm `xepBaiHopLe`): so sánh Đầu
+với Giữa CHỈ dựa vào `loai` (Mậu thầu/Đôi/Sám cô, quy đổi sang thang 5
+lá), KHÔNG so tiếp ĐIỂM SỐ trong cùng loại:
+
+```js
+// SAI — chỉ so hạng, bỏ qua điểm số cụ thể
+const loaiDauTren5 = dDau.loai === 2 ? 3 : dDau.loai;
+return dGiua.loai >= loaiDauTren5;
+```
+
+**Sửa:** dùng lại đúng hàm `soSanh` (vốn đã so ĐẦY ĐỦ cả `loai` lẫn
+`diem`, dùng cho cặp Giữa/Cuối ngay phía trên) để so Giữa với Đầu:
+
+```js
+const dDauTren5 = { loai: dDau.loai === 2 ? 3 : dDau.loai, diem: dDau.diem };
+return soSanh(sGiua, dDauTren5) >= 0;
+```
+
+Đã kiểm thử lại bằng đúng bộ bài trong ảnh (Đầu AA9/Giữa QQ976/Cuối
+22235) — giờ phát hiện ĐÚNG là lủng; test thêm các tay hợp lệ thông
+thường khác (Đầu yếu hơn Giữa, Đầu Sám cô hợp lệ, Đầu Sám cô LỚN HƠN
+Giữa Đôi → phải lủng) để đảm bảo không sinh lỗi ngược (false positive).
+
+### Lỗi 2 — AI tự xếp bài LỦNG (~1.15% số ván) sau khi Lỗi 1 được sửa
+
+**Nguyên nhân** (`src/aiEngine.js`): thuật toán `aiXepBai` chỉ thử 4
+cách "đoán" vị trí 3 lá cho Chi Đầu (yếu nhất/mạnh nhất/trộn/giữa) — đủ
+dùng khi `xepBaiHopLe` còn LỎNG (Lỗi 1), nhưng sau khi siết đúng luật,
+4 cách đoán không còn đủ để LUÔN tìm ra 1 cách xếp hợp lệ. Khi cả 4 đều
+thất bại, code rơi vào nhánh dự phòng xếp NGƯỢC (lá MẠNH NHẤT vào Đầu,
+lá YẾU NHẤT vào Cuối) — gần như chắc chắn lủng. Chạy 20.000 ván ngẫu
+nhiên: AI tự xếp lủng **~1.15%** số ván (230/20.000).
+
+**Sửa:** thử ĐỦ cả **286 cách** (tổ hợp chập 3 của 13 lá, `C(13,3)`)
+chọn Chi Đầu thay vì 4 cách đoán, và sửa hướng xếp dự phòng thành ĐÚNG
+chiều yếu→mạnh:
+
+```js
+const ungVienChiDau = [];
+for (let i = 0; i < n - 2; i++)
+  for (let j = i + 1; j < n - 1; j++)
+    for (let k = j + 1; k < n; k++)
+      ungVienChiDau.push([i, j, k]);
+// ...thử từng ứng viên như cũ (2 hướng chia Giữa/Cuối)...
+
+// Dự phòng CỰC HIẾM — nếu vẫn thay: xếp ĐÚNG hướng yếu→mạnh, KHÔNG
+// còn xếp ngược (mạnh nhất vào Đầu) như bản cũ.
+const yeuNhat3 = bai.slice(n - 3);
+const conLai10 = bai.slice(0, n - 3);
+return { chiDau: yeuNhat3, chiGiua: conLai10.slice(5, 10), chiCuoi: conLai10.slice(0, 5) };
+```
+
+Chạy lại 20.000 ván ngẫu nhiên sau khi sửa: **0 lần lủng**. Đo thời
+gian xếp bài cho 3 đối thủ (1 lần chia): **~0.83ms** — không đáng lo về
+hiệu năng dù tăng từ 4 lên 286 ứng viên.
+
+---
+
+## Chế độ chơi qua mạng LAN
+
+Thêm vào `vite.config.js`:
+
+```js
+export default defineConfig({
+  plugins: [react()],
+  server: { host: true },
+  preview: { host: true },
+})
+```
+
+**Giải thích:** `host: true` khiến Vite lắng nghe trên MỌI network
+interface (`0.0.0.0`) thay vì chỉ `localhost` — khi chạy `npm run dev`,
+terminal hiện thêm dòng `Network: http://<IP-LAN>/...`, dùng đúng địa
+chỉ đó trên điện thoại/máy khác CÙNG mạng Wi-Fi/LAN là vào chơi được,
+không cần cấu hình thêm. Áp dụng tương tự cho `preview` (chạy thử bản
+production qua `npm run build && npm run preview`). Lưu ý: lần đầu chạy,
+macOS có thể hỏi quyền cho phép Node nhận kết nối mạng đến (System
+Settings → Privacy & Security → Firewall) — cần bấm Allow.
