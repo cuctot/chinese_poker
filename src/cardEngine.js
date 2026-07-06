@@ -2,6 +2,11 @@
 // rank: 2-14 tương ứng 2,3,4,5,6,7,8,9,10,J,Q,K,A (14 = Át, mạnh nhất)
 // suit: 0-3 tương ứng 4 chất, chỉ để phân biệt 4 lá cùng rank
 
+// Import ngược từ aiEngine.js (vòng lặp import cardEngine<->aiEngine) —
+// an toàn vì aiXepBai chỉ được GỌI bên trong thân hàm moPhongMotCachChia,
+// không dùng ở top-level lúc module khởi tạo.
+import { aiXepBai } from './aiEngine.js'
+
 export function taoBoBai() {
   const boBai = [];
   for (let rank = 2; rank <= 14; rank++) {
@@ -520,6 +525,119 @@ export function tinhDiemBaoUDung(nguoiChoi, ruleset) {
   const ketQuaLoai = nguoiChoi.map(p => p.ten === 'Bạn' ? kiemTraThangTrang(p.ca13La) : null);
   if (!ketQuaLoai[0]) return null;
   return tinhDiemTuKetQuaLoai(nguoiChoi, ruleset, ketQuaLoai);
+}
+
+// ==================== V9: AI XẾP BÀI THEO PHONG CÁCH ====================
+
+// Chấm điểm 1 cách chia theo 1 phong cách cụ thể. Trả -Infinity nếu
+// KHÔNG hợp lệ (binh lủng) — áp dụng cho MỌI phong cách, không ngoại lệ.
+// Dùng ĐÚNG xepBaiHopLe đã sửa lỗi (so đầy đủ Đầu/Giữa bằng soSanh).
+export function chamDiemCachChia(chiDau, chiGiua, chiCuoi, ruleset, phongCach) {
+  if (!xepBaiHopLe(chiDau, chiGiua, chiCuoi, ruleset)) return -Infinity;
+
+  const dDau = danhGia3La(chiDau);
+  const dGiua = danhGia5La(chiGiua);
+  const dCuoi = danhGia5La(chiCuoi);
+
+  if (phongCach === 'anToan') {
+    let diem = dDau.loai + dGiua.loai + dCuoi.loai;
+    if (dDau.loai === 0) diem -= 2; // phạt nếu chi Đầu Mậu thầu
+    return diem;
+  }
+
+  if (phongCach === 'toiDaHoaDiem') {
+    return diemMotChi(ruleset, 'dau', dDau) + diemMotChi(ruleset, 'giua', dGiua) + diemMotChi(ruleset, 'cuoi', dCuoi);
+  }
+
+  // 'canBang' (mặc định, cũng dùng làm bước LỌC NHANH cho 'chuyenNghiep')
+  return dDau.loai + dGiua.loai + dCuoi.loai;
+}
+
+// Sinh tất cả tổ hợp k phần tử từ mảng (giữ nguyên tham chiếu object)
+function* toHopBai(mang, k, batDauTu = 0, hienTai = []) {
+  if (hienTai.length === k) { yield [...hienTai]; return; }
+  for (let i = batDauTu; i < mang.length; i++) {
+    hienTai.push(mang[i]);
+    yield* toHopBai(mang, k, i + 1, hienTai);
+    hienTai.pop();
+  }
+}
+
+// Duyệt TOÀN BỘ ~72.072 cách chia (không lọc gì)
+function duyetTatCaCachChia(ca13La) {
+  const ketQua = [];
+  for (const chiDau of toHopBai(ca13La, 3)) {
+    const conLai10 = ca13La.filter(l => !chiDau.includes(l));
+    for (const chiGiua of toHopBai(conLai10, 5)) {
+      const chiCuoi = conLai10.filter(l => !chiGiua.includes(l));
+      ketQua.push({ chiDau, chiGiua, chiCuoi });
+    }
+  }
+  return ketQua;
+}
+
+// Chỉ lấy cách chia HỢP LỆ — dùng ĐÚNG xepBaiHopLe đã sửa lỗi
+export function duyetCachChiaHopLe(ca13La, ruleset) {
+  return duyetTatCaCachChia(ca13La).filter(({ chiDau, chiGiua, chiCuoi }) => xepBaiHopLe(chiDau, chiGiua, chiCuoi, ruleset));
+}
+
+// Tìm cách chia TỐT NHẤT theo 1 phong cách (không mô phỏng — dùng cho
+// anToan/canBang/toiDaHoaDiem, chạy nhanh vì chỉ chấm điểm, không mô
+// phỏng đối thủ).
+export function xepBaiTheoPhongCach(ca13La, ruleset, phongCach) {
+  const tatCaHopLe = duyetCachChiaHopLe(ca13La, ruleset);
+  let totNhat = null, diemTotNhat = -Infinity;
+  for (const cach of tatCaHopLe) {
+    const diem = chamDiemCachChia(cach.chiDau, cach.chiGiua, cach.chiCuoi, ruleset, phongCach);
+    if (diem > diemTotNhat) { diemTotNhat = diem; totNhat = cach; }
+  }
+  return totNhat;
+}
+
+// Mô phỏng N lần: xáo 39 lá còn lại, chia cho 3 đối thủ (dùng aiXepBai
+// CŨ — nhanh — làm đối thủ giả lập, KHÔNG dùng duyetCachChiaHopLe cho
+// đối thủ vì quá tốn thời gian nếu lặp lại hàng nghìn lần). So cách chia
+// CỐ ĐỊNH của mình với cách xếp từng đối thủ — cộng dồn +1 thắng/-1
+// thua/0 hòa mỗi chi qua cả 3 đối thủ.
+export function moPhongMotCachChia({ chiDau, chiGiua, chiCuoi }, laCon39, soLanMoPhong) {
+  const dDauMinh = danhGia3La(chiDau), dGiuaMinh = danhGia5La(chiGiua), dCuoiMinh = danhGia5La(chiCuoi);
+  let tongDiem = 0, soLanThang = 0;
+
+  for (let lan = 0; lan < soLanMoPhong; lan++) {
+    const xao = [...laCon39];
+    for (let i = xao.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [xao[i], xao[j]] = [xao[j], xao[i]]; }
+
+    let diemVan = 0;
+    for (const bai13DoiThu of [xao.slice(0, 13), xao.slice(13, 26), xao.slice(26, 39)]) {
+      const doiThu = aiXepBai(bai13DoiThu); // dùng lại đúng hàm CŨ đã sửa lỗi ở V8, nhanh
+      diemVan += soSanh(dDauMinh, danhGia3La(doiThu.chiDau));
+      diemVan += soSanh(dGiuaMinh, danhGia5La(doiThu.chiGiua));
+      diemVan += soSanh(dCuoiMinh, danhGia5La(doiThu.chiCuoi));
+    }
+    tongDiem += diemVan;
+    if (diemVan > 0) soLanThang++;
+  }
+  return { diemTrungBinh: tongDiem / soLanMoPhong, tyLeThang: soLanThang / soLanMoPhong };
+}
+
+// Phong cách "Chuyên nghiệp": lọc nhanh Top N bằng "canBang", rồi mô
+// phỏng THẬT chỉ cho Top N đó — tránh mô phỏng cho cả 72.072 cách (quá
+// chậm). soLanMoPhong mặc định 1000 — con số đã kiểm chứng đủ tin cậy.
+export function xepBaiChuyenNghiep(ca13La, laCon39, ruleset, { soUngVien = 15, soLanMoPhong = 1000 } = {}) {
+  const tatCaHopLe = duyetCachChiaHopLe(ca13La, ruleset);
+  const daChamDiem = tatCaHopLe.map(cach => ({
+    ...cach,
+    diemLoc: chamDiemCachChia(cach.chiDau, cach.chiGiua, cach.chiCuoi, ruleset, 'canBang'),
+  }));
+  daChamDiem.sort((a, b) => b.diemLoc - a.diemLoc);
+  const topN = daChamDiem.slice(0, soUngVien);
+
+  let totNhat = null;
+  for (const cach of topN) {
+    const ketQua = moPhongMotCachChia(cach, laCon39, soLanMoPhong);
+    if (!totNhat || ketQua.tyLeThang > totNhat.tyLeThang) totNhat = { ...cach, ...ketQua };
+  }
+  return totNhat;
 }
 
 // Người chơi báo Ù nhưng SAI (bài không đủ điều kiện) — phạt 1 mức cố

@@ -705,6 +705,15 @@
   margin-top: 2px;
 }
 
+.chon-nhan-vat-ai {
+  display: block;
+  margin: 4px auto 0;
+  font-size: 12px;
+  max-width: 100%;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
 /* Màn hình rộng hơn (iPad, máy tính): giới hạn chiều rộng tổng thể để
    không bị dàn quá rộng trên màn hình lớn (lá bài đã tự co giãn vừa
    khung chứa nên không cần chỉnh riêng ở đây nữa) */
