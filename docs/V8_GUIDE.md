@@ -1632,3 +1632,109 @@ liệu ruleset vẫn còn nguyên trong `localStorage`), chỉ mất tên hiển
 Đã kiểm thử bằng Playwright: trang Luật chơi giờ chỉ liệt kê đúng 1
 preset "Chuẩn (phổ biến nhất)", không còn chữ "Tối giản" ở đâu trên
 trang; build/lint sạch.
+
+---
+
+## Sửa bài của người chơi + người thắng lúc AI thắng trắng
+
+**Triệu chứng (theo ảnh Huy chụp):** khi 1 đối thủ AI thắng trắng, bài
+của "Bạn" bị dồn hiển thị thành 1 HÀNG DUY NHẤT 13 lá chồng khít lên
+nhau (khó đọc), thay vì 3 hàng Đầu/Giữa/Cuối bình thường; đồng thời bài
+của NGƯỜI THẮNG vẫn giữ nguyên cách chia của `aiXepBai` (chỉ nhằm hợp lệ
+theo luật thường) — vd thắng bằng "Ba thùng" nhưng nhìn vào 3 hàng
+không thấy rõ 3 bộ cùng chất ở đâu, phải tự nhẩm lại mới tin.
+
+### 1. Bài "Bạn" luôn xếp bình thường theo 3 chi
+
+`tinhDiemThangTrangAI` CHỈ kiểm tra bài đối thủ (`p.ten === 'Bạn' ? null
+: kiemTraThangTrang(...)`) — "Bạn" không bao giờ tự động thắng trắng,
+nên không có lý do gì để đổi cách hiển thị bài của "Bạn" khi có NGƯỜI
+KHÁC thắng trắng. Gộp nhánh hiển thị "Bạn" từ 3 nhánh (thắng trắng / đang
+xếp / đã xác nhận) xuống còn 2 nhánh, dựa thẳng vào `vanDaKetThuc` (đã
+tính sẵn, đúng cho CẢ 2 trường hợp ván kết thúc do đối thủ thắng trắng
+lẫn do tự xác nhận):
+
+```jsx
+{!vanDaKetThuc ? (
+  <>{renderVungDangXep(chiDauGoc, BAT_DAU.dau)}{renderVungDangXep(chiGiuaGoc, BAT_DAU.giua)}{renderVungDangXep(chiCuoiGoc, BAT_DAU.cuoi)}</>
+) : (
+  <><HangBai danhSachLa={chiDauGoc} kichThuoc="lon" />{/* ...Giữa, Cuối tương tự... */}</>
+)}
+```
+
+### 2. Xếp lại bài NGƯỜI THẮNG để chứng minh rõ loại thắng trắng
+
+Hàm mới `xepBaiThangTrangDeXem(ca13La, loai)` (`cardEngine.js`) — CHỈ
+ảnh hưởng hiển thị, không đụng gì tới tính điểm (thắng trắng luôn tính
+thẳng theo `ca13La` đầy đủ, không qua chi):
+
+- **`baThung` (Ba thùng):** chứng minh được bằng toán học — 1 tay 13 lá
+  chia 4 chất mà thỏa "3 thùng" thì BẮT BUỘC dùng ĐÚNG 3 chất với số lá
+  CHÍNH XÁC 3/5/5 (chất còn lại 0 lá) — không có cách chia nào khác thỏa
+  đồng thời cả 3 điều kiện trên đúng 13 lá. Nên chỉ cần gom theo chất rồi
+  gán thẳng: nhóm 3 lá → Đầu, 2 nhóm 5 lá → Giữa/Cuối — mỗi chi hiện ra
+  ĐỒNG MÀU (đồng chất) ngay lập tức, nhìn phát biết luôn.
+- **`rongCuon`/`sanhRong`:** sắp theo rank (Rồng cuốn thì chia kiểu gì
+  cũng ra 3 thùng cùng chất sẵn rồi; Sảnh rồng chia theo dãy rank LIÊN
+  TỤC để mỗi chi tự nó cũng là 1 sảnh nhỏ).
+- **Các loại còn lại** (đôi/sám/thông...): không chia KHỚP TUYỆT ĐỐI
+  ranh giới 3/5/5 được (vd 5 đôi = 10 lá không chia đều 5/5 theo từng đôi
+  trọn vẹn) — ít nhất gom các lá CÙNG RANK đứng CẠNH NHAU (nhóm đông
+  trước, rank cao trước) cho dễ nhận ra hơn nhiều so với thứ tự tùy tiện
+  cũ.
+
+`App.jsx` thêm hàm `layBaiHienThiDoiThu(idx)`: nếu đối thủ ở vị trí đó
+đúng là người vừa thắng trắng (so với `ketQuaThangTrang.ketQuaLoai`, mảng
+lệch 1 vị trí vì phần tử 0 luôn là "Bạn"), dùng bài đã xếp lại; không thì
+giữ nguyên `baiDoiThu` (kết quả `aiXepBai` bình thường) — đối thủ THUA
+không có gì đặc biệt để phô ra.
+
+### Kiểm tra
+
+Đã kiểm thử bằng Playwright, dựng lại CHÍNH XÁC 1 ván "Ba thùng" thật
+(ép chuỗi `Math.random` để ra đúng bộ bài mong muốn, đồng thời né các
+mẫu ưu tiên cao hơn như "Sảnh rồng"/"Năm đôi thông" lỡ trùng ngẫu nhiên):
+1. "Bạn" hiện đúng 3 hàng riêng biệt (3/5/5 lá), không còn 1 hàng phẳng.
+2. Người thắng ("Đối thủ 2", loại "Ba thùng") — mỗi hàng trong 3 hàng
+   đều ĐỒNG MÀU (cùng `color` CSS, tức cùng chất) — kiểm tra bằng
+   `getComputedStyle(...).color` qua cả 13 lá.
+3. Chơi 1 ván THƯỜNG (không thắng trắng) — bài "Bạn" vẫn kéo-thả được
+   lúc đang xếp, vẫn đúng 3/5/5 sau khi xác nhận — không có regression.
+
+---
+
+## Đồng bộ giao diện màn ChonVan ("Chơi với AI")
+
+Huy phát hiện 2 chỗ CHƯA đồng bộ giữa màn chọn (`ChonVan.jsx`, trước khi
+vào ván) và màn chơi thật (`App.jsx`):
+
+1. **Tiêu đề "Chơi với AI"** ở `ChonVan.jsx` là `<h2>` mặc định (màu
+   trắng, kế thừa từ `.trang`), trong khi màn chơi thật dùng `<h1>` màu
+   VÀNG (`#f0c040`, qua rule `.trang h1`). Thêm rule riêng cho đúng
+   trang này (không đụng `h2` của Ghi điểm/Lịch sử, vốn không được nhắc
+   tới):
+
+   ```css
+   .trang-chon-van h2 {
+     color: #f0c040;
+   }
+   ```
+
+2. **Điểm tích lũy hiệp đang dở** ở `ChonVan.jsx` hiện theo dạng
+   `· <điểm>` (dấu chấm giữa) — khác với quy ước `"H: <điểm>"` đã dùng
+   thống nhất ở màn chơi thật (`App.jsx`) và màn xem lại Lịch sử. Đổi
+   cho khớp, đồng thời đổi từ `<span>` sang `<div>` để xuống dòng riêng
+   (giống `.diem-vi-tri { display: block }` đã có sẵn):
+
+   ```jsx
+   <div className="diem-vi-tri">
+     H: <b className={diem >= 0 ? 'diem-duong' : 'diem-am'}>{dinhDauDiem(diem)}{diem}</b>
+   </div>
+   ```
+
+### Kiểm tra
+
+Đã kiểm thử bằng Playwright: `getComputedStyle` xác nhận tiêu đề
+`.trang-chon-van h2` có màu `rgb(240, 192, 64)` (đúng `#f0c040`); điểm
+hiển thị đúng dạng `"H: +7"`/`"H: -18"` cho cả 4 vị trí khi đang có hiệp
+dở.

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import './App.css'
-import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai } from './cardEngine.js'
+import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai, xepBaiThangTrangDeXem } from './cardEngine.js'
 import { aiXepBai } from './aiEngine.js'
 import { RULESET_PRESETS, layRulesetTuPreset, isValidRuleset } from './ruleset.js'
 import TheBaiDon from './TheBaiDon.jsx'
@@ -446,6 +446,18 @@ function App() {
     );
   }
 
+  // Bài HIỂN THỊ cho 1 đối thủ: nếu đối thủ đó là người VỪA THẮNG TRẮNG
+  // (ketQuaLoai đúng vị trí — mảng lệch 1 so với idx trong baiDoiThu vì
+  // phần tử 0 luôn là "Bạn"), xếp lại theo `xepBaiThangTrangDeXem` để
+  // CHỨNG MINH RÕ loại bài đã thắng (vd 3 thùng); không thì giữ nguyên
+  // cách chia bình thường của `aiXepBai` (chỉ nhằm hợp lệ, không nhằm
+  // "đẹp" — không có gì đặc biệt để phô ra nếu không thắng trắng).
+  function layBaiHienThiDoiThu(idx) {
+    const loai = ketQuaThangTrang?.ketQuaLoai?.[idx + 1];
+    if (loai) return xepBaiThangTrangDeXem(boBaiDoiThu[idx], loai);
+    return baiDoiThu[idx];
+  }
+
   function renderViTriDoiThu(ten, doiThu) {
     return (
       <div>
@@ -520,15 +532,13 @@ function App() {
           <h1>Chơi với AI</h1>
 
           <div className="ban-choi ban-choi-tron">
-            <div className="vi-tri-12h">{renderViTriDoiThu('Đối thủ 2', baiDoiThu[1])}</div>
-            <div className="vi-tri-9h">{renderViTriDoiThu('Đối thủ 1', baiDoiThu[0])}</div>
-            <div className="vi-tri-3h">{renderViTriDoiThu('Đối thủ 3', baiDoiThu[2])}</div>
+            <div className="vi-tri-12h">{renderViTriDoiThu('Đối thủ 2', layBaiHienThiDoiThu(1))}</div>
+            <div className="vi-tri-9h">{renderViTriDoiThu('Đối thủ 1', layBaiHienThiDoiThu(0))}</div>
+            <div className="vi-tri-3h">{renderViTriDoiThu('Đối thủ 3', layBaiHienThiDoiThu(2))}</div>
 
             <div className="vi-tri-6h">
               {renderTenVaDiem('Bạn')}
-              {ketQuaThangTrang ? (
-                <HangBai danhSachLa={boBaiCuaToi} kichThuoc="lon" />
-              ) : !daXacNhan ? (
+              {!vanDaKetThuc ? (
                 <>
                   {renderVungDangXep(chiDauGoc, BAT_DAU.dau)}
                   {renderVungDangXep(chiGiuaGoc, BAT_DAU.giua)}

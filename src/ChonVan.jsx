@@ -15,9 +15,9 @@ function ChonVan({ hiepDoDang, onChonTiepHiep, onChonHiepMoi }) {
       <div className="ten-vi-tri">
         {ten}
         {hiepDoDang && (
-          <span className="diem-vi-tri">
-            {' '}· <b className={diem >= 0 ? 'diem-duong' : 'diem-am'}>{dinhDauDiem(diem)}{diem}</b>
-          </span>
+          <div className="diem-vi-tri">
+            H: <b className={diem >= 0 ? 'diem-duong' : 'diem-am'}>{dinhDauDiem(diem)}{diem}</b>
+          </div>
         )}
       </div>
     );

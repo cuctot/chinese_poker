@@ -406,6 +406,50 @@ export function kiemTraThangTrang(ca13La) {
   return null;
 }
 
+// Xếp lại 13 lá của người THẮNG TRẮNG thành 3 chi CHỈ ĐỂ HIỂN THỊ (không
+// ảnh hưởng điểm số — thắng trắng luôn tính thẳng theo `ca13La`, không
+// qua chi) — sao cho nhìn vào là thấy NGAY vì sao thắng, thay vì giữ
+// nguyên cách chia của `aiXepBai` (chỉ nhằm mục đích hợp lệ theo luật
+// thường, không liên quan gì tới việc chứng minh loại thắng trắng).
+export function xepBaiThangTrangDeXem(ca13La, loai) {
+  if (loai === 'baThung') {
+    // Toán học: 13 lá chia 4 chất mà thỏa "3 thùng" (1 chi 3 lá + 2 chi 5
+    // lá CÙNG CHẤT) thì bắt buộc đúng 3 chất được dùng với số lá CHÍNH
+    // XÁC 3/5/5 (chất còn lại 0 lá) — không có cách chia nào khác thỏa
+    // được đồng thời cả 3 điều kiện trên 13 lá. Nên chỉ cần gom theo
+    // chất rồi gán đúng nhóm-3-lá vào Đầu, 2 nhóm-5-lá vào Giữa/Cuối.
+    const theoChat = [[], [], [], []];
+    ca13La.forEach(l => theoChat[l.suit].push(l));
+    theoChat.forEach(ds => ds.sort((a, b) => b.rank - a.rank));
+    const idx3 = theoChat.findIndex(ds => ds.length === 3);
+    const idx5s = [0, 1, 2, 3].filter(i => theoChat[i].length === 5);
+    if (idx3 !== -1 && idx5s.length === 2) {
+      return { chiDau: theoChat[idx3], chiGiua: theoChat[idx5s[0]], chiCuoi: theoChat[idx5s[1]] };
+    }
+  }
+
+  if (loai === 'rongCuon' || loai === 'sanhRong') {
+    // Rồng cuốn (13 lá cùng 1 chất): chia kiểu gì cũng ra 3 thùng cùng
+    // chất, nên sắp theo rank cho gọn mắt. Sảnh rồng (đủ 13 rank liên
+    // tiếp 2→A): chia theo DÃY RANK LIÊN TỤC để mỗi chi TỰ NÓ cũng là 1
+    // sảnh nhỏ, thấy rõ tính "liên tục" của cả bộ bài.
+    const daSap = [...ca13La].sort((a, b) => a.rank - b.rank);
+    return { chiDau: daSap.slice(0, 3), chiGiua: daSap.slice(3, 8), chiCuoi: daSap.slice(8, 13) };
+  }
+
+  // Các loại còn lại (đôi/sám/thông...) không chia KHỚP TUYỆT ĐỐI ranh
+  // giới 3/5/5 được (vd 5 đôi = 10 lá không chia đều 5/5 theo từng đôi
+  // trọn vẹn) — nhưng vẫn gom các lá CÙNG RANK đứng CẠNH NHAU (nhóm đông
+  // trước, rank cao trước) để dễ nhận ra đôi/sám hơn nhiều so với thứ tự
+  // tùy tiện của `aiXepBai`.
+  const theoRank = {};
+  ca13La.forEach(l => { (theoRank[l.rank] ??= []).push(l); });
+  const daGom = Object.values(theoRank)
+    .sort((a, b) => b.length - a.length || b[0].rank - a[0].rank)
+    .flat();
+  return { chiDau: daGom.slice(0, 3), chiGiua: daGom.slice(3, 8), chiCuoi: daGom.slice(8, 13) };
+}
+
 // Điểm 1 người nhận được từ MỖI đối thủ nếu thắng trắng bằng loại "loai"
 export function diemThangTrangMotNguoi(ruleset, loai) {
   if (ruleset.thangTrang?.dungMucSapLang) {
