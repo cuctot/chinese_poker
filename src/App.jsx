@@ -20,7 +20,6 @@ import {
 const BAT_DAU = { dau: 0, giua: 3, cuoi: 8 };
 const KHOA_LUU_RULESET = 'mauBinhLuatChoi';
 const KHOA_LUU_PRESET_RIENG = 'mauBinhLuatTuyChinh';
-const TEN_NGUOI_CHOI = ['Bạn', 'Đối thủ 1', 'Đối thủ 2', 'Đối thủ 3'];
 const NGUON = 'choiAI';
 const TEN_THANG_TRANG_HIEN_THI = {
   rongCuon: 'Rồng cuốn', sanhRong: 'Sảnh rồng', namDoiMotSam: 'Năm đôi 1 sám',
@@ -78,12 +77,26 @@ function tinhKetQuaDoiThu(nhanVatIds, tatCaBaiArr, rulesetArg) {
   });
 }
 
-function layPhongCachTuKetQua(ketQuaDoiThu) {
+function layPhongCachTuKetQua(ketQuaDoiThu, tenDoiThu) {
   return {
-    'Đối thủ 1': ketQuaDoiThu[0].phongCachThat,
-    'Đối thủ 2': ketQuaDoiThu[1].phongCachThat,
-    'Đối thủ 3': ketQuaDoiThu[2].phongCachThat,
+    [tenDoiThu[0]]: ketQuaDoiThu[0].phongCachThat,
+    [tenDoiThu[1]]: ketQuaDoiThu[1].phongCachThat,
+    [tenDoiThu[2]]: ketQuaDoiThu[2].phongCachThat,
   };
+}
+
+// Tên THẬT của 3 đối thủ trong hiệp này = tên nhân vật đã chọn (vd
+// "Safeway", "Mad Max"...) — dùng làm KHÓA NỘI BỘ DUY NHẤT xuyên suốt
+// (nguoiChoi lúc tính điểm, diem/tongCongDon, lịch sử) THAY CHO "Đối thủ
+// 1/2/3" — để thống kê/lịch sử gắn liền với người chơi + phong cách,
+// không phải vị trí ngồi. `ChonVan.jsx` đảm bảo 3 nhân vật LUÔN khác
+// nhau (mỗi dropdown loại bỏ nhân vật đã được chọn ở dropdown khác) nên
+// không xảy ra trùng tên → không lo bị gộp nhầm điểm giữa 2 đối thủ.
+// Fallback "Đối thủ 1/2/3" CHỈ dùng khi chưa có hiệp nào (nền lúc khởi
+// động app) hoặc hiệp cũ từ trước khi có field `nhanVatDoiThu`.
+function layTenDoiThu(hiep) {
+  if (!hiep?.nguoiChoi) return ['Đối thủ 1', 'Đối thủ 2', 'Đối thủ 3'];
+  return hiep.nguoiChoi.slice(1);
 }
 
 function App() {
@@ -108,10 +121,6 @@ function App() {
   const [trangThaiLuat, setTrangThaiLuat] = useState(() => docTrangThaiLuat());
   const { presetId, ruleset, daTuyChinh } = trangThaiLuat;
   const boBaiDoiThu = useMemo(() => [tatCaBai[1], tatCaBai[2], tatCaBai[3]], [tatCaBai]);
-  const [baiDoiThu, setBaiDoiThu] = useState(() => tinhKetQuaDoiThu(null, tatCaBai, ruleset).map(k => k.cachChia));
-  const [phongCachThatDoiThu, setPhongCachThatDoiThu] = useState(() => layPhongCachTuKetQua(tinhKetQuaDoiThu(null, tatCaBai, ruleset)));
-  const [presetRieng, setPresetRieng] = useState(() => docPresetRieng());
-  const tatCaPreset = [...RULESET_PRESETS, ...presetRieng];
 
   // ---- Lịch sử Chơi với AI (V8): chỉ còn Hiệp (gốc) + Ván, không còn
   // Phiên. Chỉ giữ danhSachVanLS làm state React (cần để hiển thị
@@ -123,8 +132,19 @@ function App() {
   const [danhSachVanLS, setDanhSachVanLS] = useState(() => docDanhSach(KHOA_VAN));
 
   // Hiệp AI đang dùng để ghi ván vào — null khi còn ở màn ChonVan (chưa
-  // quyết định tiếp hiệp cũ hay bắt đầu hiệp mới).
+  // quyết định tiếp hiệp cũ hay bắt đầu hiệp mới). Khai báo TRƯỚC
+  // baiDoiThu/phongCachThatDoiThu vì 2 state đó cần `tenDoiThu` (suy ra từ
+  // hiepAIHienTai) ngay lúc khởi tạo.
   const [hiepAIHienTai, setHiepAIHienTai] = useState(null);
+  // Tên THẬT (= tên nhân vật đã chọn) của 3 đối thủ trong hiệp hiện tại —
+  // dùng làm khóa nội bộ DUY NHẤT xuyên suốt (xem `layTenDoiThu` ở trên).
+  const tenDoiThu = layTenDoiThu(hiepAIHienTai);
+  const tenTatCaNguoiChoi = ['Bạn', ...tenDoiThu];
+
+  const [baiDoiThu, setBaiDoiThu] = useState(() => tinhKetQuaDoiThu(null, tatCaBai, ruleset).map(k => k.cachChia));
+  const [phongCachThatDoiThu, setPhongCachThatDoiThu] = useState(() => layPhongCachTuKetQua(tinhKetQuaDoiThu(null, tatCaBai, ruleset), tenDoiThu));
+  const [presetRieng, setPresetRieng] = useState(() => docPresetRieng());
+  const tatCaPreset = [...RULESET_PRESETS, ...presetRieng];
 
   // Kết quả tổng kết hiệp (nếu VÁN VỪA XONG là ván thứ 12) — null nếu chưa
   // tới lúc tổng kết.
@@ -145,7 +165,7 @@ function App() {
   useEffect(() => {
     const ketQua = tinhKetQuaDoiThu(hiepAIHienTai?.nhanVatDoiThu, tatCaBai, ruleset);
     setBaiDoiThu(ketQua.map(k => k.cachChia));
-    setPhongCachThatDoiThu(layPhongCachTuKetQua(ketQua));
+    setPhongCachThatDoiThu(layPhongCachTuKetQua(ketQua, tenDoiThu));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ruleset]);
 
@@ -156,9 +176,10 @@ function App() {
     const baiMoi = chiaBai();
     setTatCaBai(baiMoi);
     setOCacChi([...baiMoi[0]]);
+    const tenDoiThuMoi = layTenDoiThu(hiep);
     const ketQuaDoiThu = tinhKetQuaDoiThu(hiep?.nhanVatDoiThu, baiMoi, ruleset);
     setBaiDoiThu(ketQuaDoiThu.map(k => k.cachChia));
-    setPhongCachThatDoiThu(layPhongCachTuKetQua(ketQuaDoiThu));
+    setPhongCachThatDoiThu(layPhongCachTuKetQua(ketQuaDoiThu, tenDoiThuMoi));
     setDaXacNhan(false);
     setKetQuaDiem(null);
     setKetQuaHiepVuaXong(null);
@@ -174,7 +195,10 @@ function App() {
 
   function chonHiepMoi(nhanVatDaChon) {
     const dsHiepTuoi = docDanhSach(KHOA_HIEP);
-    const hiepMoi = taoHiepMoi(NGUON, TEN_NGUOI_CHOI, '', nhanVatDaChon);
+    // nguoiChoi dùng THẲNG tên nhân vật đã chọn (vd "Safeway") làm định
+    // danh — ChonVan.jsx đảm bảo 3 nhân vật không trùng nhau nên an toàn.
+    const tenDoiThuMoi = nhanVatDaChon.map(id => layNhanVat(id).ten);
+    const hiepMoi = taoHiepMoi(NGUON, ['Bạn', ...tenDoiThuMoi], '', nhanVatDaChon);
     const dsHiepMoi = [...dsHiepTuoi, hiepMoi];
     ghiDanhSach(KHOA_HIEP, dsHiepMoi);
     batDauVanMoi(hiepMoi);
@@ -216,12 +240,13 @@ function App() {
   const ketQuaThangTrang = useMemo(() => {
     const nguoiChoi = [
       { ten: 'Bạn', ca13La: boBaiCuaToi },
-      { ten: 'Đối thủ 1', ca13La: boBaiDoiThu[0] },
-      { ten: 'Đối thủ 2', ca13La: boBaiDoiThu[1] },
-      { ten: 'Đối thủ 3', ca13La: boBaiDoiThu[2] },
+      { ten: tenDoiThu[0], ca13La: boBaiDoiThu[0] },
+      { ten: tenDoiThu[1], ca13La: boBaiDoiThu[1] },
+      { ten: tenDoiThu[2], ca13La: boBaiDoiThu[2] },
     ];
     return tinhDiemThangTrangAI(nguoiChoi, ruleset);
-  }, [boBaiCuaToi, boBaiDoiThu, ruleset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boBaiCuaToi, boBaiDoiThu, ruleset, hiepAIHienTai]);
 
   // Ghi log khi AI tự động thắng trắng (V4) — CHỈ khi người chơi thực sự
   // đang ở màn Chơi với AI (trang === 'choiAI' && daChonVan); nếu không,
@@ -234,7 +259,7 @@ function App() {
     if (ketQuaThangTrang && boBaiDaGhiThangTrangRef.current !== boBaiCuaToi) {
       boBaiDaGhiThangTrangRef.current = boBaiCuaToi;
       const ketQuaLog = ghiVanAIVaoLichSu({
-        nguoiChoiBaiThat: TEN_NGUOI_CHOI.map((ten, i) => ({ ten, ca13La: tatCaBai[i] })),
+        nguoiChoiBaiThat: tenTatCaNguoiChoi.map((ten, i) => ({ ten, ca13La: tatCaBai[i] })),
         diem: ketQuaThangTrang.diem,
         laThangTrang: true,
         loaiThangTrang: ketQuaThangTrang.ketQuaLoai?.find(l => l !== null),
@@ -374,9 +399,9 @@ function App() {
     if (ketQuaThangTrang) return;
     const nguoiChoi = [
       { ten: 'Bạn', chiDau: chiDauGoc, chiGiua: chiGiuaGoc, chiCuoi: chiCuoiGoc },
-      { ten: 'Đối thủ 1', ...baiDoiThu[0] },
-      { ten: 'Đối thủ 2', ...baiDoiThu[1] },
-      { ten: 'Đối thủ 3', ...baiDoiThu[2] },
+      { ten: tenDoiThu[0], ...baiDoiThu[0] },
+      { ten: tenDoiThu[1], ...baiDoiThu[1] },
+      { ten: tenDoiThu[2], ...baiDoiThu[2] },
     ];
     const ketQua = tinhDiem(nguoiChoi, ruleset);
     setKetQuaDiem(ketQua);
@@ -414,9 +439,9 @@ function App() {
     setDangXacNhanBaoU(false);
     const nguoiChoiThangTrang = [
       { ten: 'Bạn', ca13La: chiDauGoc.concat(chiGiuaGoc, chiCuoiGoc) },
-      { ten: 'Đối thủ 1', ...baiDoiThu[0] },
-      { ten: 'Đối thủ 2', ...baiDoiThu[1] },
-      { ten: 'Đối thủ 3', ...baiDoiThu[2] },
+      { ten: tenDoiThu[0], ...baiDoiThu[0] },
+      { ten: tenDoiThu[1], ...baiDoiThu[1] },
+      { ten: tenDoiThu[2], ...baiDoiThu[2] },
     ];
     const ketQuaDung = tinhDiemBaoUDung(nguoiChoiThangTrang, ruleset);
     const baiThatDeGhi = nguoiChoiThangTrang.map(p => ({ ten: p.ten, ca13La: p.ca13La }));
@@ -578,9 +603,9 @@ function App() {
           <h1>Chơi với AI</h1>
 
           <div className="ban-choi ban-choi-tron">
-            <div className="vi-tri-12h">{renderViTriDoiThu('Đối thủ 2', layBaiHienThiDoiThu(1))}</div>
-            <div className="vi-tri-9h">{renderViTriDoiThu('Đối thủ 1', layBaiHienThiDoiThu(0))}</div>
-            <div className="vi-tri-3h">{renderViTriDoiThu('Đối thủ 3', layBaiHienThiDoiThu(2))}</div>
+            <div className="vi-tri-12h">{renderViTriDoiThu(tenDoiThu[1], layBaiHienThiDoiThu(1))}</div>
+            <div className="vi-tri-9h">{renderViTriDoiThu(tenDoiThu[0], layBaiHienThiDoiThu(0))}</div>
+            <div className="vi-tri-3h">{renderViTriDoiThu(tenDoiThu[2], layBaiHienThiDoiThu(2))}</div>
 
             <div className="vi-tri-6h">
               {renderTenVaDiem('Bạn')}
@@ -606,7 +631,7 @@ function App() {
               {ketQuaThangTrang && (
                 <div className="banner-thang-trang">
                   🎉 Ù ngay! {ketQuaThangTrang.ketQuaLoai
-                    .map((loai, i) => loai ? `${TEN_NGUOI_CHOI[i]}: ${TEN_THANG_TRANG_HIEN_THI[loai]}` : null)
+                    .map((loai, i) => loai ? `${tenTatCaNguoiChoi[i]}: ${TEN_THANG_TRANG_HIEN_THI[loai]}` : null)
                     .filter(Boolean)
                     .join(' — ')}
                 </div>

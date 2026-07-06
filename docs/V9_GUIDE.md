@@ -808,3 +808,141 @@ thực thi cụ thể / khác biệt nhỏ so với bản nháp:
 - `npx vite build` sạch; `npm run lint` chỉ còn đúng 1 cảnh báo CŨ, có
   từ trước V9 (`react-hooks(exhaustive-deps)` ở effect ghi log thắng
   trắng tự động — không liên quan tới thay đổi V9).
+
+### Fix: màn chọn nhân vật không hiện khi đã có hiệp dở
+
+**Lỗi Huy báo:** vào "Chơi với AI", bấm "Bắt đầu hiệp mới" mà KHÔNG thấy
+màn chọn nhân vật đối thủ đâu cả.
+
+**Nguyên nhân:** bản triển khai Phase 6 ban đầu chỉ hiện 3 `<select>`
+chọn nhân vật khi `!hiepDoDang` (chưa có hiệp dở) — hiểu nhầm ý "hiệp dở
+đã cố định nhân vật, không đổi được giữa chừng" thành "ẩn luôn cả màn
+CHỌN nhân vật cho hiệp SẮP TẠO". Trong thực tế hầu như lúc nào cũng có 1
+hiệp dở từ lần chơi trước (chơi liên tục nhiều ngày), nên màn chọn gần
+như KHÔNG BAO GIỜ hiện ra — dù nút "Bắt đầu hiệp mới" vẫn bấm được và
+vẫn tạo hiệp mới bình thường (chỉ là không cho chọn nhân vật, luôn dùng
+mặc định Safeway/New Balance/Mad Max).
+
+**Sửa:** tách hẳn 2 khối trong `ChonVan.jsx` — khối preview tên+điểm
+(chỉ có thêm điểm khi có hiệp dở) và khối chọn nhân vật (LUÔN hiện,
+không phụ thuộc `hiepDoDang`, vì lựa chọn này chỉ áp dụng cho hiệp MỚI
+sắp được tạo lúc bấm nút, không liên quan gì tới hiệp dở đang có).
+
+**Kiểm thử qua Playwright** (tái hiện đúng kịch bản lỗi): chơi 1 ván rồi
+bấm "Dừng" (tạo hiệp dở dang, chưa đủ 12 ván) → quay lại "Chơi với AI"
+→ xác nhận thấy nút "Tiếp hiệp cũ" HIỂN THỊ nhưng vẫn có đúng 3 select
+nhân vật (trước sửa: 0 select). Chọn Monte Carlo cho 1 vị trí, bấm "Bắt
+đầu hiệp mới", xác nhận hiệp mới ghi đúng `nhanVatDoiThu` đã chọn vào
+`localStorage`.
+
+### Fix: tên người chơi trong ván vẫn là "Đối thủ x", không đổi theo nhân vật đã chọn
+
+**Lỗi Huy báo:** sau khi chọn nhân vật (vd Mad Max, Safeway...) cho các
+đối thủ, vào ván chơi vẫn thấy nhãn "Đối thủ 1"/"Đối thủ 2"/"Đối thủ 3"
+ở vị trí trên bàn, banner "Ù ngay!", và phần "Xem cách tính chi tiết" —
+không phản ánh tên nhân vật vừa chọn.
+
+**Nguyên nhân:** `App.jsx` dùng CHUỖI "Đối thủ 1"/"Đối thủ 2"/"Đối thủ 3"
+làm KHÓA NỘI BỘ xuyên suốt — vừa để tra điểm (`diem['Đối thủ 1']`,
+`tongCongDon['Đối thủ 1']`...) vừa để IN RA MÀN HÌNH — nên chưa từng có
+chỗ nào chuyển sang tên nhân vật đã chọn khi hiển thị.
+
+**Sửa:** thêm 1 lớp ánh xạ HIỂN THỊ RIÊNG, tách khỏi khóa tính điểm —
+`layTenHienThiDoiThu(hiepAIHienTai)` tra tên nhân vật thật từ
+`hiepAIHienTai.nhanVatDoiThu`, và hàm `tenHienThi(tenKhoa)` chỉ dùng ở
+những chỗ IN chữ ra (vị trí trên bàn, banner thắng trắng, dòng "So với
+X:" trong giải trình) — mọi chỗ TÍNH ĐIỂM (`nguoiChoi` khi gọi
+`tinhDiem`, `diem`, `tongCongDonHiepHienTai`, ghi lịch sử...) vẫn giữ
+NGUYÊN khóa "Đối thủ 1/2/3" như cũ, không đổi. Lý do KHÔNG đổi thẳng
+khóa: 2 đối thủ có thể lỡ chọn TRÙNG 1 nhân vật (vd cả 2 đều chọn
+Safeway) — nếu đổi thẳng khóa thành tên nhân vật, 2 đối thủ sẽ bị GỘP
+LÀM 1 trong các object điểm theo tên (`diem`, `tongCongDon`...), sai
+lệch nghiêm trọng. Cùng cách xử lý áp dụng luôn cho preview ở
+`ChonVan.jsx` (hiệp dở đã có sẵn `nhanVatDoiThu` → hiện đúng tên nhân
+vật thay vì "Đối thủ x").
+
+**Kiểm thử qua Playwright:** chọn rõ 3 nhân vật KHÁC NHAU (Safeway/Mad
+Max/Cổ Điển) cho 3 đối thủ, vào ván — xác nhận đúng 3 tên hiện trên bàn;
+xác nhận bài xong, tổng điểm 4 người vẫn CHÍNH XÁC = 0 (không bị gộp
+nhầm khóa); mở "Xem cách tính chi tiết" thấy đúng "So với Safeway:",
+"So với Mad Max:", "So với Cổ Điển:" thay vì "Đối thủ 1/2/3". Có
+screenshot xác nhận trực quan.
+
+### Điều tra: "lỗi so bài — Bạn không thể ăn sập Mad Max"
+
+Huy gửi ảnh 1 ván cụ thể (Bạn +7, Mad Max -13, Safeway 0, New Balance
++6) và nghi ngờ so bài sai. Đã dựng lại CHÍNH XÁC 4 bộ bài trong ảnh
+bằng Node và chạy qua `tinhDiem` — kết quả ra ĐÚNG y hệt 4 số trên, và
+chi tiết so với Mad Max xác nhận:
+
+```
+Chi Đầu: Bạn thắng bằng Đôi (đôi 4 > Mậu thầu 8-7-5)
+Chi Giữa: Bạn thắng bằng Đôi (đôi 10 > đôi 3)
+Chi Cuối: Bạn thắng bằng Sảnh (A-5 > đôi K)
+→ Bạn ăn sập Mad Max: 3 × 2 = +6
+```
+
+**Kết luận: KHÔNG phải lỗi.** Bộ Cuối "A♠ 5♦ 4♣ 3♥ 2♥" của Bạn nhìn qua
+dễ tưởng là "Ách rời" (không đôi), nhưng thực chất là **sảnh A-2-3-4-5**
+("sảnh hạ"/"cầu thang lá" — the wheel). `danhGia5La` đã nhận diện đúng
+trường hợp đặc biệt này (`loai: 4`, xem comment trong `cardEngine.js`),
+và theo luật chuẩn (`sanhHaYeuNhat` đang tắt), MỌI sảnh — kể cả sảnh hạ —
+đều thắng MỌI đôi, bất kể mạnh/yếu trong nhóm sảnh với nhau. Cờ
+`sanhHaYeuNhat` (bật ở "Luật chơi") CHỈ ảnh hưởng thứ hạng giữa các sảnh
+với NHAU (khiến sảnh hạ thua các sảnh khác), KHÔNG BAO GIỜ hạ nó xuống
+dưới hạng Đôi — đây là quy tắc bài Tây tiêu chuẩn, không phải lỗi V9.
+Nếu Huy vẫn thấy sai ở chỗ khác (vd dòng chữ hiển thị trong "Xem cách
+tính chi tiết"), gửi thêm ảnh cụ thể phần đó để kiểm tra tiếp.
+
+### Đổi khóa nội bộ từ "Đối thủ 1/2/3" sang tên nhân vật thật (theo yêu cầu Huy)
+
+**Vấn đề:** Huy chỉ ra thống kê/lịch sử nên gắn với NGƯỜI CHƠI + PHONG
+CÁCH, không phải VỊ TRÍ NGỒI — bản sửa lỗi tên hiển thị trước đó (mục
+"Fix: tên người chơi...") chỉ đổi lớp HIỂN THỊ, còn khóa thật dùng để
+tính điểm/lưu lịch sử (`diem`, `tongCongDonHiepHienTai`,
+`cheDoThucTeDoiThu`, cột trong Lịch sử...) vẫn là "Đối thủ 1/2/3" —
+không đủ để phân tích "nhân vật X thắng bao nhiêu" xuyên suốt nhiều
+hiệp.
+
+**Đã hỏi Huy 2 phương án** (giữ khóa vị trí + xây bảng phân tích riêng,
+so với đổi hẳn khóa sang tên nhân vật) — **Huy chọn đổi hẳn khóa.**
+
+**Đã làm:**
+- `hiepMoi.nguoiChoi` khi tạo hiệp Chơi-AI mới (`chonHiepMoi` trong
+  `App.jsx`) giờ là `['Bạn', <tên nhân vật 1>, <tên nhân vật 2>, <tên
+  nhân vật 3>]` — vd `['Bạn', 'Safeway', 'Mad Max', 'Cổ Điển']` — THAY
+  VÌ `['Bạn', 'Đối thủ 1', 'Đối thủ 2', 'Đối thủ 3']`. Toàn bộ
+  `diem`/`tongCongDon`/`cheDoThucTeDoiThu`/lịch sử tự động dùng đúng tên
+  này vì đều tra cứu qua `nguoiChoi`.
+- **Bắt buộc 3 nhân vật KHÁC NHAU** ở `ChonVan.jsx`: mỗi dropdown loại
+  bỏ (không hiện) nhân vật đã được chọn ở 2 dropdown còn lại — về mặt
+  giao diện KHÔNG THỂ chọn trùng, nên không có rủi ro 2 đối thủ trùng
+  tên bị gộp nhầm điểm (object `diem`/`tongCongDon` khóa theo tên).
+- `App.jsx` thêm hàm `layTenDoiThu(hiep)` (đọc thẳng
+  `hiep.nguoiChoi.slice(1)`, fallback `['Đối thủ 1','Đối thủ 2','Đối thủ
+  3']` khi chưa có hiệp/hiệp cũ chưa có `nguoiChoi` dạng mới) — biến
+  `tenDoiThu` (3 tên đối thủ hiệp hiện tại) và `tenTatCaNguoiChoi` (thêm
+  'Bạn' ở đầu) được tính 1 lần mỗi render, dùng THAY THẾ mọi chỗ trước
+  đây hardcode chuỗi "Đối thủ 1/2/3" — bao gồm: xây `nguoiChoi` lúc
+  `xacNhanBai`/`xacNhanBaoU`/`ketQuaThangTrang`, nhãn vị trí trên bàn,
+  banner "Ù ngay!", và khóa của `cheDoThucTeDoiThu`.
+- Gỡ bỏ hoàn toàn lớp ánh xạ "hiển thị riêng" (`tenHienThi`/
+  `banDoTenHienThi`) đã thêm ở bản sửa trước — không cần nữa vì khóa
+  THẬT giờ chính là tên hiển thị.
+- **Không cần migrate dữ liệu cũ:** mỗi Hiệp tự chứa `nguoiChoi` của
+  riêng nó — Hiệp tạo TRƯỚC thay đổi này (dùng "Đối thủ 1/2/3") và Hiệp
+  tạo SAU (dùng tên nhân vật) cùng tồn tại bình thường trong 1
+  `localStorage`, Lịch sử vẫn hiển thị đúng theo từng Hiệp vì cột bảng
+  luôn đọc từ `hiep.nguoiChoi`, không hardcode tên.
+
+**Kiểm thử qua Playwright:**
+1. Chọn Safeway cho vị trí 9h → xác nhận dropdown 12h/3h KHÔNG còn hiện
+   "Safeway" trong danh sách lựa chọn (chặn trùng tận gốc ở UI).
+2. Chọn đủ 3 nhân vật khác nhau (Safeway/Mad Max/Cổ Điển), bắt đầu hiệp
+   — `localStorage` ghi đúng `nguoiChoi: ["Bạn","Safeway","Mad
+   Max","Cổ Điển"]`; xác nhận bài, `diem` có ĐÚNG 4 khóa tên thật, tổng
+   = 0; `cheDoThucTeDoiThu` cũng khóa theo tên thật
+   (`{"Safeway":"anToan","Mad Max":"toiDaHoaDiem","Cổ Điển":"coDien"}`).
+3. Chơi 1 ván rồi "Dừng" (tạo hiệp dở) → quay lại "Chơi với AI" — màn
+   preview hiện ĐÚNG "Safeway"/"Mad Max"/"Cổ Điển" kèm điểm tích lũy,
+   không còn "Đối thủ 1/2/3".
