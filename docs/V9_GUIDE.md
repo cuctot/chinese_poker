@@ -792,12 +792,16 @@ thực thi cụ thể / khác biệt nhỏ so với bản nháp:
   ván — quan trọng vì phong cách "Chuyên nghiệp" tốn ~1-2 giây/đối thủ,
   tính trùng sẽ tăng gấp đôi thời gian chờ vào ván.
 - **Phase 7**: nút "Gợi ý" thêm vào hàng nút lúc CHƯA xác nhận bài,
-  dùng `xepBaiChuyenNghiep` trên đúng 13 lá của Bạn. Bước "dữ liệu mồi"
-  (bơm 1000 ván giả từ 1 lần chạy Chuyên nghiệp) là thao tác thủ công
-  một lần theo đúng mô tả gốc — CHƯA chạy vì cần thực hiện trên
-  localStorage của trình duyệt Huy dùng thật, không phải máy kiểm thử;
-  code (`xepBaiChuyenNghiep` + `taoVanMoi`/`themVanVaoLichSu`) đã sẵn
-  sàng để Huy tự chạy qua Console nếu muốn.
+  dùng `xepBaiChuyenNghiep` trên đúng 13 lá của Bạn.
+- **Bước 2 "dữ liệu mồi" (bơm 1000 ván giả từ 1 lần chạy Chuyên nghiệp):
+  Huy quyết định BỎ QUA, không cần làm nữa** — mục đích ban đầu chỉ là
+  có sẵn dữ liệu để test nhanh trang Lịch sử, không ảnh hưởng gì tới
+  logic chơi thật; Huy sẽ có dữ liệu thật từ việc chơi thật, không cần
+  bơm giả. Ghi chú thêm: `xepBaiChuyenNghiep` hiện tại chỉ trả về 1 cách
+  chia TỐT NHẤT (không lộ ra toàn bộ 1000 lần mô phỏng riêng lẻ bên
+  trong), nên nếu sau này đổi ý muốn làm bước này, cần sửa thêm hàm mô
+  phỏng để thu thập chi tiết từng lần trước khi có thể lưu thành 1000
+  "ván mồi" đúng như mô tả gốc.
 - **Kiểm thử qua Playwright** (không chỉ code review): chọn Monte Carlo
   cho 1 đối thủ rồi vào ván — mất ~2.6 giây (đúng như dự đoán); bấm
   "Gợi ý" ra đúng % tỷ lệ thắng; sau khi xác nhận bài, `localStorage`
