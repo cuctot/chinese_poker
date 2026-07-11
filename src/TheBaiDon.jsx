@@ -9,9 +9,7 @@ const MAU_CHAT = ['#1a1a1a', '#d32f2f', '#e65100', '#1a1a1a'];
 function TheBaiDon({ laBai, faceDown = false, onPointerDown }) {
   if (faceDown) {
     return (
-      <div className="the-bai-don the-bai-don-sap" onPointerDown={onPointerDown}>
-        <div className="the-bai-don-sap-noi-dung">?</div>
-      </div>
+      <div className="the-bai-don the-bai-don-sap" onPointerDown={onPointerDown} />
     );
   }
 

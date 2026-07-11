@@ -13,6 +13,13 @@
 // thẳng `hiepDoDang.nguoiChoi`, không cần dịch tên riêng. Bắt buộc 3
 // nhân vật KHÁC NHAU (mỗi dropdown loại bỏ nhân vật đã chọn ở 2 dropdown
 // kia) để tránh 2 đối thủ trùng tên bị gộp nhầm điểm.
+//
+// Tên CỦA CHÍNH người chơi (phần tử 0 của `nguoiChoi`) cũng tự chọn được
+// ở đây — đặt Ở ĐÚNG VỊ TRÍ 6H trong bàn tròn chọn nhân vật (cùng hàng
+// với 12h/9h/3h của 3 đối thủ), ô nhập điền sẵn `tenNguoiChoiMacDinh`
+// (App.jsx tính sẵn: tên dùng ở hiệp GẦN NHẤT, hoặc "Bạn" nếu chưa từng
+// chơi). Giống nhân vật đối thủ, tên này chỉ áp dụng cho hiệp SẮP tạo —
+// hiệp dở dang (nếu tiếp tục) vẫn giữ nguyên tên đã cố định từ lúc tạo.
 import { useState } from 'react'
 import { DANH_SACH_NHAN_VAT_MAC_DINH } from './nhanVatAI.js'
 
@@ -22,12 +29,18 @@ function dinhDauDiem(d) {
 
 const TEN_MAC_DINH = ['Đối thủ 1', 'Đối thủ 2', 'Đối thủ 3'];
 
-function ChonVan({ hiepDoDang, onChonTiepHiep, onChonHiepMoi }) {
+function ChonVan({ hiepDoDang, tenNguoiChoiMacDinh, onChonTiepHiep, onChonHiepMoi }) {
   const [nhanVatDoiThu, setNhanVatDoiThu] = useState(['safeway', 'newbalance', 'madmax']);
+  const [tenNguoiChoi, setTenNguoiChoi] = useState(tenNguoiChoiMacDinh ?? 'Bạn');
   const tenDoiThuDoDang = hiepDoDang?.nguoiChoi?.slice(1) ?? TEN_MAC_DINH;
+  const tenBanDoDang = hiepDoDang?.nguoiChoi?.[0] ?? 'Bạn';
 
   function suaNhanVatDoiThu(idx, id) {
     setNhanVatDoiThu(prev => prev.map((n, i) => i === idx ? id : n));
+  }
+
+  function batDauHiepMoi() {
+    onChonHiepMoi(nhanVatDoiThu, tenNguoiChoi);
   }
 
   function renderTenViTri(ten) {
@@ -40,6 +53,21 @@ function ChonVan({ hiepDoDang, onChonTiepHiep, onChonHiepMoi }) {
             H: <b className={diem >= 0 ? 'diem-duong' : 'diem-am'}>{dinhDauDiem(diem)}{diem}</b>
           </div>
         )}
+      </div>
+    );
+  }
+
+  function renderNhapTenNguoiChoi() {
+    return (
+      <div className="ten-vi-tri">
+        <input
+          type="text"
+          className="input-ten-nguoi-choi"
+          value={tenNguoiChoi}
+          onChange={e => setTenNguoiChoi(e.target.value)}
+          maxLength={20}
+          placeholder="Bạn"
+        />
       </div>
     );
   }
@@ -65,12 +93,14 @@ function ChonVan({ hiepDoDang, onChonTiepHiep, onChonHiepMoi }) {
     <div className="trang-chon-van">
       <h2>Chơi với AI</h2>
 
-      <div className="ban-choi ban-choi-preview">
-        <div className="vi-tri-12h">{renderTenViTri(tenDoiThuDoDang[1])}</div>
-        <div className="vi-tri-9h">{renderTenViTri(tenDoiThuDoDang[0])}</div>
-        <div className="vi-tri-3h">{renderTenViTri(tenDoiThuDoDang[2])}</div>
-        <div className="vi-tri-6h">{renderTenViTri('Bạn')}</div>
-      </div>
+      {hiepDoDang && (
+        <div className="ban-choi ban-choi-preview">
+          <div className="vi-tri-12h">{renderTenViTri(tenDoiThuDoDang[1])}</div>
+          <div className="vi-tri-9h">{renderTenViTri(tenDoiThuDoDang[0])}</div>
+          <div className="vi-tri-3h">{renderTenViTri(tenDoiThuDoDang[2])}</div>
+          <div className="vi-tri-6h">{renderTenViTri(tenBanDoDang)}</div>
+        </div>
+      )}
 
       {hiepDoDang && (
         <button className="nut-chon-van nut-chon-van-tiep" onClick={onChonTiepHiep} style={{ marginBottom: 8 }}>
@@ -79,15 +109,16 @@ function ChonVan({ hiepDoDang, onChonTiepHiep, onChonHiepMoi }) {
       )}
 
       <p className="khoi-luat-tieu-de" style={{ marginBottom: 4 }}>
-        Chọn nhân vật đối thủ cho hiệp MỚI:
+        Chọn tên bạn & nhân vật đối thủ cho hiệp MỚI:
       </p>
       <div className="ban-choi ban-choi-preview">
         <div className="vi-tri-12h">{renderChonNhanVat(1)}</div>
         <div className="vi-tri-9h">{renderChonNhanVat(0)}</div>
         <div className="vi-tri-3h">{renderChonNhanVat(2)}</div>
+        <div className="vi-tri-6h">{renderNhapTenNguoiChoi()}</div>
       </div>
 
-      <button className="nut-chon-van" onClick={() => onChonHiepMoi(nhanVatDoiThu)}>
+      <button className="nut-chon-van" onClick={batDauHiepMoi}>
         Bắt đầu hiệp mới
       </button>
 

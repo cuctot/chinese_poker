@@ -15,6 +15,7 @@ function TrangChu({ onDieuHuong }) {
         </svg>
       </div>
       <h1 className="ten-game">Mậu Binh</h1>
+      <div className="phien-ban">Phiên bản V0.11</div>
 
       <div className="danh-sach-dieu-huong">
         <button className="nut-dieu-huong" onClick={() => onDieuHuong('choiAI')}>

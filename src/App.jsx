@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import './App.css'
 import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai, xepBaiThangTrangDeXem, xepBaiChuyenNghiep } from './cardEngine.js'
 import { DANH_SACH_NHAN_VAT_MAC_DINH, aiXepBaiTheoNhanVat } from './nhanVatAI.js'
-import { RULESET_PRESETS, layRulesetTuPreset, isValidRuleset } from './ruleset.js'
+import { RULESET_PRESETS, layRulesetTuPreset, isValidRuleset, damBaoBonusGiuaDayDu } from './ruleset.js'
 import TheBaiDon from './TheBaiDon.jsx'
 import HangBai from './HangBai.jsx'
 import LuatChoi from './LuatChoi.jsx'
@@ -13,7 +13,7 @@ import LichSu from './LichSu.jsx'
 import {
   taoHiepMoi, taoVanMoi, themVanVaoLichSu, layHiepDangDoHoacNull,
   docDanhSach, ghiDanhSach, KHOA_HIEP, KHOA_VAN,
-  nguoiChiaChoVan, tinhTongKetHiep, layVanCuaHiep,
+  nguoiChiaChoVan, tinhTongKetHiep, layVanCuaHiep, layTenNguoiChoiGanNhat,
 } from './lichSuChoi.js'
 
 // 13 ô cố định: index 0-2 = Chi Đầu, 3-7 = Chi Giữa, 8-12 = Chi Cuối
@@ -31,8 +31,8 @@ function docTrangThaiLuat() {
     const raw = localStorage.getItem(KHOA_LUU_RULESET);
     if (!raw) return { presetId: 'chuan', ruleset: layRulesetTuPreset('chuan'), daTuyChinh: false };
     const obj = JSON.parse(raw);
-    if (obj && obj.presetId && isValidRuleset(obj.ruleset)) return obj;
-    if (isValidRuleset(obj)) return { presetId: 'chuan', ruleset: obj, daTuyChinh: true };
+    if (obj && obj.presetId && isValidRuleset(obj.ruleset)) return { ...obj, ruleset: damBaoBonusGiuaDayDu(obj.ruleset) };
+    if (isValidRuleset(obj)) return { presetId: 'chuan', ruleset: damBaoBonusGiuaDayDu(obj), daTuyChinh: true };
     return { presetId: 'chuan', ruleset: layRulesetTuPreset('chuan'), daTuyChinh: false };
   } catch {
     return { presetId: 'chuan', ruleset: layRulesetTuPreset('chuan'), daTuyChinh: false };
@@ -46,6 +46,7 @@ function docPresetRieng() {
     const arr = JSON.parse(raw);
     return Array.isArray(arr)
       ? arr.filter(p => p && p.id && p.ten && isValidRuleset(p.ruleset))
+          .map(p => ({ ...p, ruleset: damBaoBonusGiuaDayDu(p.ruleset) }))
       : [];
   } catch {
     return [];
@@ -116,6 +117,7 @@ function App() {
   const [dangXacNhanBaoU, setDangXacNhanBaoU] = useState(false);
   const [dangGoiY, setDangGoiY] = useState(false);
   const [ketQuaGoiY, setKetQuaGoiY] = useState(null);
+  const [goiYLucXacNhan, setGoiYLucXacNhan] = useState(null);
   const [trang, setTrang] = useState('trangChu'); // 'trangChu' | 'choiAI' | 'luatChoi' | 'ghiDiem' | 'lichSu'
   const [daChonVan, setDaChonVan] = useState(false);
   const [trangThaiLuat, setTrangThaiLuat] = useState(() => docTrangThaiLuat());
@@ -139,7 +141,11 @@ function App() {
   // Tên THẬT (= tên nhân vật đã chọn) của 3 đối thủ trong hiệp hiện tại —
   // dùng làm khóa nội bộ DUY NHẤT xuyên suốt (xem `layTenDoiThu` ở trên).
   const tenDoiThu = layTenDoiThu(hiepAIHienTai);
-  const tenTatCaNguoiChoi = ['Bạn', ...tenDoiThu];
+  // Tên hiển thị của CHÍNH người chơi trong hiệp hiện tại — tự chọn lúc
+  // "Bắt đầu hiệp mới" (xem ChonVan.jsx), mặc định 'Bạn' nếu chưa có hiệp
+  // nào (nền lúc khởi động app).
+  const tenBan = hiepAIHienTai?.nguoiChoi?.[0] ?? 'Bạn';
+  const tenTatCaNguoiChoi = [tenBan, ...tenDoiThu];
 
   const [baiDoiThu, setBaiDoiThu] = useState(() => tinhKetQuaDoiThu(null, tatCaBai, ruleset).map(k => k.cachChia));
   const [phongCachThatDoiThu, setPhongCachThatDoiThu] = useState(() => layPhongCachTuKetQua(tinhKetQuaDoiThu(null, tatCaBai, ruleset), tenDoiThu));
@@ -149,6 +155,10 @@ function App() {
   // Kết quả tổng kết hiệp (nếu VÁN VỪA XONG là ván thứ 12) — null nếu chưa
   // tới lúc tổng kết.
   const [ketQuaHiepVuaXong, setKetQuaHiepVuaXong] = useState(null);
+
+  // V11: đếm ngược thời gian xếp bài — reset về đúng số giây cấu hình mỗi
+  // khi vào ván mới (xem batDauVanMoi).
+  const [giayConLai, setGiayConLai] = useState(() => ruleset.thoiGianXepBai?.giay ?? 60);
 
   useEffect(() => {
     localStorage.setItem(KHOA_LUU_RULESET, JSON.stringify(trangThaiLuat));
@@ -184,6 +194,8 @@ function App() {
     setKetQuaDiem(null);
     setKetQuaHiepVuaXong(null);
     setKetQuaGoiY(null);
+    setGoiYLucXacNhan(null);
+    setGiayConLai(ruleset.thoiGianXepBai?.giay ?? 60);
     setHiepAIHienTai(hiep);
     setDaChonVan(true);
   }
@@ -193,12 +205,13 @@ function App() {
     batDauVanMoi(hiep);
   }
 
-  function chonHiepMoi(nhanVatDaChon) {
+  function chonHiepMoi(nhanVatDaChon, tenNguoiChoi) {
     const dsHiepTuoi = docDanhSach(KHOA_HIEP);
     // nguoiChoi dùng THẲNG tên nhân vật đã chọn (vd "Safeway") làm định
     // danh — ChonVan.jsx đảm bảo 3 nhân vật không trùng nhau nên an toàn.
     const tenDoiThuMoi = nhanVatDaChon.map(id => layNhanVat(id).ten);
-    const hiepMoi = taoHiepMoi(NGUON, ['Bạn', ...tenDoiThuMoi], '', nhanVatDaChon);
+    const tenBanMoi = (tenNguoiChoi || '').trim() || 'Bạn';
+    const hiepMoi = taoHiepMoi(NGUON, [tenBanMoi, ...tenDoiThuMoi], '', nhanVatDaChon);
     const dsHiepMoi = [...dsHiepTuoi, hiepMoi];
     ghiDanhSach(KHOA_HIEP, dsHiepMoi);
     batDauVanMoi(hiepMoi);
@@ -239,7 +252,7 @@ function App() {
 
   const ketQuaThangTrang = useMemo(() => {
     const nguoiChoi = [
-      { ten: 'Bạn', ca13La: boBaiCuaToi },
+      { ten: tenBan, ca13La: boBaiCuaToi },
       { ten: tenDoiThu[0], ca13La: boBaiDoiThu[0] },
       { ten: tenDoiThu[1], ca13La: boBaiDoiThu[1] },
       { ten: tenDoiThu[2], ca13La: boBaiDoiThu[2] },
@@ -337,6 +350,29 @@ function App() {
   // 12 chuyển sang màn tổng kết).
   const soVanDangHienThi = Math.min(soVanDaXongHienTai + (vanDaKetThuc ? 0 : 1), 12);
 
+  // V11: đếm ngược thời gian xếp bài — hết giờ tự động xác nhận ĐÚNG cách
+  // xếp hiện tại, gọi thẳng xacNhanBai() (không viết luồng riêng). Dừng
+  // đếm khi ván đã kết thúc — dùng `vanDaKetThuc` (KHÔNG chỉ `daXacNhan`)
+  // vì thắng trắng tự động KHÔNG set `daXacNhan=true` (xem comment ở
+  // `vanDaKetThuc` phía trên) — nếu chỉ canh `daXacNhan`, đồng hồ sẽ tiếp
+  // tục chạy vô ích (dù gọi xacNhanBai() lúc đó cũng không gây hại gì, vì
+  // hàm tự return sớm khi có ketQuaThangTrang) sau khi ván đã thắng trắng
+  // xong. Tạm dừng khi đang mở hộp thoại Báo Ù, tiếp tục ngay khi đóng.
+  useEffect(() => {
+    if (vanDaKetThuc) return;
+    if (!ruleset.thoiGianXepBai?.batBuoc) return;
+    if (dangXacNhanBaoU) return;
+
+    if (giayConLai <= 0) {
+      xacNhanBai();
+      return;
+    }
+
+    const timer = setTimeout(() => setGiayConLai(g => g - 1), 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [giayConLai, vanDaKetThuc, dangXacNhanBaoU, ruleset.thoiGianXepBai?.batBuoc]);
+
   // Phát hiện 1 hiệp AI còn DỞ DANG (chưa đủ 12 ván) từ lần chơi trước, để
   // màn ChonVan cho phép "Tiếp hiệp cũ". Chỉ tính khi đang ở đúng màn chọn
   // (chưa vào ván chơi). Đọc thẳng localStorage (không dùng state có thể
@@ -351,6 +387,13 @@ function App() {
         return { ...hiep, soVan: vanCuaHiep.length, tongKet: tinhTongKetHiep(vanCuaHiep) };
       })()
     : null;
+
+  // Tên điền sẵn cho ô chọn tên người chơi ở màn ChonVan — ưu tiên tên
+  // của hiệp GẦN NHẤT (dù dở dang hay đã xong) để không phải gõ lại mỗi
+  // lần, mặc định 'Bạn' nếu chưa từng chơi hiệp nào.
+  const tenNguoiChoiMacDinh = (trang === 'choiAI' && !daChonVan)
+    ? layTenNguoiChoiGanNhat(docDanhSach(KHOA_HIEP), NGUON)
+    : 'Bạn';
 
   function onPointerDownLa(e, tuIndex) {
     e.target.setPointerCapture(e.pointerId);
@@ -397,8 +440,30 @@ function App() {
 
   function xacNhanBai() {
     if (ketQuaThangTrang) return;
+
+    if (ketQuaGoiY) {
+      const nguoiChoiVoiGoiY = [
+        { ten: tenBan, chiDau: ketQuaGoiY.chiDau, chiGiua: ketQuaGoiY.chiGiua, chiCuoi: ketQuaGoiY.chiCuoi },
+        { ten: tenDoiThu[0], ...baiDoiThu[0] },
+        { ten: tenDoiThu[1], ...baiDoiThu[1] },
+        { ten: tenDoiThu[2], ...baiDoiThu[2] },
+      ];
+      setGoiYLucXacNhan({
+        diem: tinhDiem(nguoiChoiVoiGoiY, ruleset).diem[tenBan],
+        tyLeThang: ketQuaGoiY.tyLeThang,
+        // Chụp lại LUÔN cách xếp gợi ý (không chỉ điểm) — để còn hiển thị
+        // lại cho Huy xem sau khi đã xác nhận, không phụ thuộc vòng đời
+        // của `ketQuaGoiY` (vốn chỉ hiện khi CHƯA xác nhận).
+        chiDau: ketQuaGoiY.chiDau,
+        chiGiua: ketQuaGoiY.chiGiua,
+        chiCuoi: ketQuaGoiY.chiCuoi,
+      });
+    } else {
+      setGoiYLucXacNhan(null);
+    }
+
     const nguoiChoi = [
-      { ten: 'Bạn', chiDau: chiDauGoc, chiGiua: chiGiuaGoc, chiCuoi: chiCuoiGoc },
+      { ten: tenBan, chiDau: chiDauGoc, chiGiua: chiGiuaGoc, chiCuoi: chiCuoiGoc },
       { ten: tenDoiThu[0], ...baiDoiThu[0] },
       { ten: tenDoiThu[1], ...baiDoiThu[1] },
       { ten: tenDoiThu[2], ...baiDoiThu[2] },
@@ -427,6 +492,11 @@ function App() {
     }, 0);
   }
 
+  function chapNhanGoiY() {
+    if (!ketQuaGoiY) return;
+    setOCacChi([...ketQuaGoiY.chiDau, ...ketQuaGoiY.chiGiua, ...ketQuaGoiY.chiCuoi]);
+  }
+
   function moHopThoaiBaoU() {
     setDangXacNhanBaoU(true);
   }
@@ -438,7 +508,7 @@ function App() {
   function xacNhanBaoU() {
     setDangXacNhanBaoU(false);
     const nguoiChoiThangTrang = [
-      { ten: 'Bạn', ca13La: chiDauGoc.concat(chiGiuaGoc, chiCuoiGoc) },
+      { ten: tenBan, ca13La: chiDauGoc.concat(chiGiuaGoc, chiCuoiGoc) },
       { ten: tenDoiThu[0], ...baiDoiThu[0] },
       { ten: tenDoiThu[1], ...baiDoiThu[1] },
       { ten: tenDoiThu[2], ...baiDoiThu[2] },
@@ -592,6 +662,7 @@ function App() {
           </button>
           <ChonVan
             hiepDoDang={hiepAIDoDang}
+            tenNguoiChoiMacDinh={tenNguoiChoiMacDinh}
             onChonTiepHiep={chonTiepHiepDoDang}
             onChonHiepMoi={chonHiepMoi}
           />
@@ -608,7 +679,7 @@ function App() {
             <div className="vi-tri-3h">{renderViTriDoiThu(tenDoiThu[2], layBaiHienThiDoiThu(2))}</div>
 
             <div className="vi-tri-6h">
-              {renderTenVaDiem('Bạn')}
+              {renderTenVaDiem(tenBan)}
               {!vanDaKetThuc ? (
                 <>
                   {renderVungDangXep(chiDauGoc, BAT_DAU.dau)}
@@ -625,12 +696,17 @@ function App() {
             </div>
 
             <div className="khu-giua-ban">
-              <p className="ghi-chu-luat" style={{ textAlign: 'center', margin: 0 }}>
-                {ketQuaHiepVuaXong ? 'Hết hiệp' : hiepAIHienTai && `Hiệp ${hiepAIHienTai.soThuTu} — Ván ${soVanDangHienThi}/12`}
+              <p className={ketQuaHiepVuaXong ? 'ghi-chu-luat khoi-luat-tieu-de tieu-de-het-hiep' : 'ghi-chu-luat'} style={{ textAlign: 'center', margin: 0 }}>
+                {ketQuaHiepVuaXong ? `Tổng kết Hiệp ${ketQuaHiepVuaXong.hiepSoThuTu}` : hiepAIHienTai && `Hiệp ${hiepAIHienTai.soThuTu} — Ván ${soVanDangHienThi}/12`}
               </p>
+              {!vanDaKetThuc && ruleset.thoiGianXepBai?.batBuoc && (
+                <div className={giayConLai <= 10 ? 'dem-nguoc dem-nguoc-canh-bao' : 'dem-nguoc'}>
+                  Còn {giayConLai} giây
+                </div>
+              )}
               {ketQuaThangTrang && (
                 <div className="banner-thang-trang">
-                  🎉 Ù ngay! {ketQuaThangTrang.ketQuaLoai
+                  🎉 Thắng trắng! {ketQuaThangTrang.ketQuaLoai
                     .map((loai, i) => loai ? `${tenTatCaNguoiChoi[i]}: ${TEN_THANG_TRANG_HIEN_THI[loai]}` : null)
                     .filter(Boolean)
                     .join(' — ')}
@@ -653,8 +729,11 @@ function App() {
                     <button className="nut-choi" onClick={goiY} disabled={dangGoiY}>
                       {dangGoiY ? 'Đang tính...' : 'Gợi ý'}
                     </button>
+                    {ketQuaGoiY && (
+                      <button className="nut-choi" onClick={chapNhanGoiY}>Chấp nhận gợi ý</button>
+                    )}
                     <button className="nut-choi" onClick={xacNhanBai}>Xác nhận bài</button>
-                    <button className="nut-choi" onClick={moHopThoaiBaoU}>Báo Ù</button>
+                    <button className="nut-choi" onClick={moHopThoaiBaoU}>Báo thắng trắng</button>
                   </>
                 )}
               </div>
@@ -673,14 +752,28 @@ function App() {
 
           {(ketQuaThangTrang || (daXacNhan && ketQuaDiem)) && (
             <div className="ket-qua">
+              {goiYLucXacNhan && daXacNhan && ketQuaDiem && (
+                <div className="khoi-luat">
+                  <div className="khoi-luat-tieu-de">
+                    Gợi ý lúc đó (tỷ lệ thắng ước tính: {(goiYLucXacNhan.tyLeThang * 100).toFixed(0)}%)
+                  </div>
+                  <HangBai danhSachLa={goiYLucXacNhan.chiDau} kichThuoc="nho" />
+                  <HangBai danhSachLa={goiYLucXacNhan.chiGiua} kichThuoc="nho" />
+                  <HangBai danhSachLa={goiYLucXacNhan.chiCuoi} kichThuoc="nho" />
+                  <p className="ghi-chu-luat">
+                    Nếu dùng gợi ý: {goiYLucXacNhan.diem > 0 ? '+' : ''}{goiYLucXacNhan.diem} điểm
+                    (so với thực tế {ketQuaDiem.diem[tenBan] > 0 ? '+' : ''}{ketQuaDiem.diem[tenBan]})
+                  </p>
+                </div>
+              )}
               <button className="nut-xem-giai-trinh" onClick={() => setHienGiaiTrinh(v => !v)}>
                 {hienGiaiTrinh ? 'Ẩn cách tính chi tiết' : 'Xem cách tính chi tiết'}
               </button>
 
               {hienGiaiTrinh && (
                 <div className="khoi-giai-trinh">
-                  <div className="giai-trinh-tieu-de">Cách tính điểm của Bạn:</div>
-                  {(ketQuaHienTai.dienGiaiTheoDoiThu['Bạn'] || []).map((muc, idx) => (
+                  <div className="giai-trinh-tieu-de">Cách tính điểm của {tenBan}:</div>
+                  {(ketQuaHienTai.dienGiaiTheoDoiThu[tenBan] || []).map((muc, idx) => (
                     <div key={idx} className="dong-giai-trinh">
                       <div className="giai-trinh-doi-thu">
                         {muc.doiThu ? `So với ${muc.doiThu}:` : (ketQuaThangTrang ? 'Thắng trắng / loại thắng trắng:' : 'Chi Á (tính riêng cho cả ván):')}
@@ -707,14 +800,14 @@ function App() {
           {dangXacNhanBaoU && (
             <div className="lop-phu-xac-nhan">
               <div className="hop-xac-nhan-bao-u">
-                <p>Bạn có CHẮC CHẮN muốn Báo Ù?</p>
+                <p>Bạn có CHẮC CHẮN muốn báo thắng trắng?</p>
                 <p className="canh-bao-bao-u">
                   Nếu bài của bạn KHÔNG đủ điều kiện thắng trắng, bạn sẽ bị phạt{' '}
                   {ruleset.thangTrang?.phatBaoUSai ?? 6} điểm cho MỖI đối thủ.
                 </p>
                 <div className="dong-nut-xac-nhan-bao-u">
                   <button className="nut-huy-bao-u" onClick={huyBaoU}>Hủy, xếp bài tiếp</button>
-                  <button className="nut-xac-nhan-bao-u" onClick={xacNhanBaoU}>Chắc chắn, Báo Ù!</button>
+                  <button className="nut-xac-nhan-bao-u" onClick={xacNhanBaoU}>Chắc chắn, Báo thắng trắng!</button>
                 </div>
               </div>
             </div>

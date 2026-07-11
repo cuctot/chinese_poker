@@ -83,8 +83,14 @@
 .ten-game {
   font-size: 32px;
   color: #f0c040;
-  margin-bottom: 32px;
+  margin-bottom: 4px;
   letter-spacing: 2px;
+}
+
+.phien-ban {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 28px;
 }
 
 .danh-sach-dieu-huong {
@@ -158,6 +164,20 @@
   background: linear-gradient(135deg, #d4a017, #f0c040);
   color: #1a2010;
   border-color: transparent;
+}
+
+.input-ten-nguoi-choi {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  margin: 4px auto 0;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.06);
+  color: white;
 }
 
 .ghi-chu-canh-bao-van-moi {
@@ -274,6 +294,12 @@
   margin-bottom: 8px;
 }
 
+.khoi-luat-tieu-de.tieu-de-het-hiep {
+  font-size: 20px;
+  padding: 8px 0;
+  text-align: center;
+}
+
 .boc-bang-diem {
   overflow-x: auto;
   margin-bottom: 12px;
@@ -353,11 +379,9 @@
 
 .dong-diem-goc {
   display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
 }
 
-.dong-diem-goc label,
 .khoi-luat label {
   display: flex;
   flex-direction: column;
@@ -386,13 +410,23 @@
 }
 
 .dong-bonus-dac-biet span:first-child {
-  font-style: italic;
+  font-style: normal;
   opacity: 0.9;
 }
 
-.dong-bonus-chi-doc span:last-child {
-  opacity: 0.7;
-  font-style: italic;
+.dong-thong-so {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.dong-thong-so > span:first-child {
+  text-align: left;
+}
+
+.dong-thong-so input[type="number"] {
+  text-align: right;
 }
 
 .khoi-luat input[type="number"] {
@@ -477,16 +511,26 @@
   margin-top: 8px;
 }
 
-.ghi-chu-chi-giua {
-  font-size: 11px;
-  opacity: 0.6;
-  margin-top: 8px;
-}
-
 .ghi-chu-luat {
   font-size: 11px;
   opacity: 0.6;
   margin-bottom: 8px;
+}
+
+.dem-nguoc {
+  text-align: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #f0c040;
+  margin-bottom: 8px;
+}
+.dem-nguoc-canh-bao {
+  color: #f87171;
+  animation: nhap-nhay-dem-nguoc 1s infinite;
+}
+@keyframes nhap-nhay-dem-nguoc {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .khoi-luu-rieng {
@@ -530,9 +574,16 @@
 .hang-nut-choi {
   display: flex;
   justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   margin: 12px 0;
+  padding-bottom: 2px;
+}
+
+.hang-nut-choi .nut-choi {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* ---- Thẻ bài đơn giản (dùng chung Bạn + AI) + hàng bài tự co giãn ----

@@ -5,11 +5,15 @@ import {
 } from './lichSuChoi.js'
 import HangBai from './HangBai.jsx'
 
-function dinhDangGioNgay(ts) {
-  const d = new Date(ts);
+function dinhDangThoiGianAnToan(timestamp) {
+  if (!timestamp || Number.isNaN(timestamp)) return '—';
+  const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) return '—';
   const gio = String(d.getHours()).padStart(2, '0');
   const phut = String(d.getMinutes()).padStart(2, '0');
-  return `${gio}:${phut} ${d.getDate()}/${d.getMonth() + 1}`;
+  const ngay = String(d.getDate()).padStart(2, '0');
+  const thang = String(d.getMonth() + 1).padStart(2, '0');
+  return `${gio}:${phut} ${ngay}/${thang}`;
 }
 
 // Nhóm các Hiệp LIÊN TIẾP theo thời gian có CÙNG danh sách người chơi
@@ -37,9 +41,23 @@ function LichSu() {
   const [tabDangXem, setTabDangXem] = useState('thatNgoai');
   const [hiepMoRong, setHiepMoRong] = useState(null);
   const [vanAIDangXem, setVanAIDangXem] = useState(null);
+  const [trangHienTai, setTrangHienTai] = useState(0);
 
+  const SO_HIEP_MOI_TRANG = 10;
   const hiepDungTab = danhSachHiep.filter(h => h.nguon === tabDangXem);
-  const cacBang = nhomHiepThanhBang(hiepDungTab).reverse(); // bảng GẦN ĐÂY NHẤT hiện trước
+  const hiepDaSapXep = [...hiepDungTab].sort((a, b) => b.soThuTu - a.soThuTu); // mới nhất trước
+  const tongSoTrang = Math.max(1, Math.ceil(hiepDaSapXep.length / SO_HIEP_MOI_TRANG));
+  const hiepTrangHienTai = hiepDaSapXep.slice(
+    trangHienTai * SO_HIEP_MOI_TRANG,
+    (trangHienTai + 1) * SO_HIEP_MOI_TRANG
+  );
+  // nhomHiepThanhBang cần duyệt theo thứ tự THỜI GIAN TĂNG DẦN để gộp đúng
+  // các Hiệp liên tiếp cùng roster — nên đảo lại cả thứ tự bảng LẪN thứ
+  // tự Hiệp TRONG MỖI bảng ở đây, để hiển thị luôn hiệp MỚI NHẤT trên
+  // cùng (khớp yêu cầu "ván/hiệp mới nhất lên trên cùng").
+  const cacBang = nhomHiepThanhBang(hiepTrangHienTai)
+    .reverse()
+    .map(bang => ({ ...bang, hieps: [...bang.hieps].reverse() }));
 
   function moRongVan(hiepId) {
     setHiepMoRong(hiepMoRong === hiepId ? null : hiepId);
@@ -70,7 +88,7 @@ function LichSu() {
                 <Fragment key={hiep.id}>
                   <tr style={{ cursor: 'pointer' }} title={hiep.chuThich || undefined}
                       onClick={() => moRongVan(hiep.id)}>
-                    <td>{dinhDangGioNgay(hiep.batDau)}</td>
+                    <td>{dinhDangThoiGianAnToan(hiep.batDau)}</td>
                     <td>#{hiep.soThuTu}{!daXong && ' (dở)'}</td>
                     {bang.nguoiChoi.map(ten => {
                       const d = tongKet[ten] || 0;
@@ -94,8 +112,12 @@ function LichSu() {
   }
 
   function renderBangVan(hiep, vanCuaHiep) {
+    const vanMoiNhatTruoc = [...vanCuaHiep].reverse(); // ván mới nhất lên trên cùng
     return (
       <table className="bang-diem bang-diem-lichsu bang-diem-con">
+        <caption style={{ textAlign: 'left', fontSize: 12, opacity: 0.8, padding: '4px 0' }}>
+          Hiệp #{hiep.soThuTu}
+        </caption>
         <thead>
           <tr>
             <th>Thời gian</th>
@@ -104,11 +126,11 @@ function LichSu() {
           </tr>
         </thead>
         <tbody>
-          {vanCuaHiep.map(van => (
+          {vanMoiNhatTruoc.map(van => (
             <tr key={van.id}
                 style={{ cursor: tabDangXem === 'choiAI' ? 'pointer' : 'default' }}
                 onClick={() => tabDangXem === 'choiAI' && setVanAIDangXem(van)}>
-              <td>{dinhDangGioNgay(van.thoiGian)}</td>
+              <td>{dinhDangThoiGianAnToan(van.thoiGian)}</td>
               <td>{van.soThuTuTrongHiep}{van.laThangTrang && ' 🎉'}</td>
               {hiep.nguoiChoi.map(ten => {
                 const d = van.diem[ten] ?? 0;
@@ -125,15 +147,16 @@ function LichSu() {
   // (Bạn ở 6h cỡ "lon", 3 đối thủ ở 9h/12h/3h cỡ "nho") — thay vì liệt kê
   // dọc như trước, để "đúng định dạng khi chơi".
   function renderVanAI(van) {
-    const layNguoi = ten => van.nguoiChoiBaiThat.find(p => p.ten === ten);
-
-    function renderMotNguoi(ten, kichThuoc) {
-      const p = layNguoi(ten);
-      const d = van.diem[ten] ?? 0;
+    // Dùng THẲNG đúng người + tên THẬT đã lưu trong nguoiChoiBaiThat (theo
+    // đúng thứ tự lúc chia: 0 = Bạn, 1/2/3 = 3 đối thủ) — KHÔNG tra theo
+    // tên cứng "Đối thủ 1/2/3" (tên đó có thể không khớp nếu hiệp dùng tên
+    // nhân vật thật, vd "Safeway"), tránh lỗi tìm không thấy người chơi.
+    function renderMotNguoi(p, kichThuoc) {
+      const d = van.diem[p.ten] ?? 0;
       return (
         <div>
           <div className="ten-vi-tri">
-            {ten}
+            {p.ten}
             <div className="diem-vi-tri">
               <b className={d >= 0 ? 'diem-duong' : 'diem-am'}>{d > 0 ? '+' : ''}{d}</b>
             </div>
@@ -155,14 +178,14 @@ function LichSu() {
       <div className="khoi-luat">
         <button className="nut-choi" onClick={() => setVanAIDangXem(null)}>Quay lại</button>
         <div className="khoi-luat-tieu-de">
-          Ván {van.soThuTuTrongHiep} — {new Date(van.thoiGian).toLocaleString('vi-VN')}
-          {van.laThangTrang && ` — Ù bằng ${van.loaiThangTrang}`}
+          Ván {van.soThuTuTrongHiep} — {dinhDangThoiGianAnToan(van.thoiGian)}
+          {van.laThangTrang && ` — Thắng trắng bằng ${van.loaiThangTrang}`}
         </div>
         <div className="ban-choi ban-choi-tron">
-          <div className="vi-tri-12h">{renderMotNguoi('Đối thủ 2', 'nho')}</div>
-          <div className="vi-tri-9h">{renderMotNguoi('Đối thủ 1', 'nho')}</div>
-          <div className="vi-tri-3h">{renderMotNguoi('Đối thủ 3', 'nho')}</div>
-          <div className="vi-tri-6h">{renderMotNguoi('Bạn', 'lon')}</div>
+          <div className="vi-tri-12h">{renderMotNguoi(van.nguoiChoiBaiThat[2], 'nho')}</div>
+          <div className="vi-tri-9h">{renderMotNguoi(van.nguoiChoiBaiThat[1], 'nho')}</div>
+          <div className="vi-tri-3h">{renderMotNguoi(van.nguoiChoiBaiThat[3], 'nho')}</div>
+          <div className="vi-tri-6h">{renderMotNguoi(van.nguoiChoiBaiThat[0], 'lon')}</div>
         </div>
       </div>
     );
@@ -174,12 +197,22 @@ function LichSu() {
 
       <div className="chuyen-tab">
         <button className={tabDangXem === 'thatNgoai' ? 'nut-tab nut-tab-dang-chon' : 'nut-tab'}
-                onClick={() => { setTabDangXem('thatNgoai'); setVanAIDangXem(null); setHiepMoRong(null); }}>Bài thật</button>
+                onClick={() => { setTabDangXem('thatNgoai'); setVanAIDangXem(null); setHiepMoRong(null); setTrangHienTai(0); }}>Ghi điểm</button>
         <button className={tabDangXem === 'choiAI' ? 'nut-tab nut-tab-dang-chon' : 'nut-tab'}
-                onClick={() => { setTabDangXem('choiAI'); setVanAIDangXem(null); setHiepMoRong(null); }}>Chơi với AI</button>
+                onClick={() => { setTabDangXem('choiAI'); setVanAIDangXem(null); setHiepMoRong(null); setTrangHienTai(0); }}>Chơi với AI</button>
       </div>
 
       {!vanAIDangXem && cacBang.map(renderBangHiep)}
+
+      {!vanAIDangXem && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 12 }}>
+          <button className="nut-choi" disabled={trangHienTai === 0}
+                  onClick={() => setTrangHienTai(t => t - 1)}>&lt;&lt;</button>
+          <span style={{ alignSelf: 'center' }}>Trang {trangHienTai + 1}/{tongSoTrang}</span>
+          <button className="nut-choi" disabled={trangHienTai >= tongSoTrang - 1}
+                  onClick={() => setTrangHienTai(t => t + 1)}>&gt;&gt;</button>
+        </div>
+      )}
 
       {tabDangXem === 'choiAI' && vanAIDangXem && renderVanAI(vanAIDangXem)}
     </div>

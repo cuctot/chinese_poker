@@ -255,7 +255,7 @@ function GhiDiem() {
 
       {hiepDangGhi && hiepDaXong(hiepDangGhi.id, danhSachVan) && (
         <div className="khoi-luat">
-          <div className="khoi-luat-tieu-de">Tổng kết Hiệp {hiepDangGhi.soThuTu}</div>
+          <div className="khoi-luat-tieu-de tieu-de-het-hiep">Tổng kết Hiệp {hiepDangGhi.soThuTu}</div>
           {renderBangDiem(false)}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button className="nut-choi" onClick={hiepMoiTiepTheo}>Hiệp tiếp theo</button>

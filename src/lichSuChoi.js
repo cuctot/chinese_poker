@@ -83,6 +83,15 @@ export function layVanCuaHiep(hiepId, danhSachVan) {
   return danhSachVan.filter(v => v.hiepId === hiepId).sort((a, b) => a.thoiGian - b.thoiGian);
 }
 
+// Tên hiển thị của người chơi ("Bạn" theo mặc định) dùng ở hiệp GẦN NHẤT
+// (không cần còn dở dang) của 1 nguồn — làm giá trị điền sẵn khi người
+// chơi được chọn lại tên cho hiệp mới, để không phải gõ lại mỗi lần nếu
+// họ đã đổi tên trước đó. 'Bạn' nếu chưa từng có hiệp nào.
+export function layTenNguoiChoiGanNhat(danhSachHiep, nguon) {
+  const hiepCungNguon = danhSachHiep.filter(h => h.nguon === nguon).sort((a, b) => b.soThuTu - a.soThuTu);
+  return hiepCungNguon[0]?.nguoiChoi?.[0] ?? 'Bạn';
+}
+
 // Hiệp coi là XONG khi đủ 12 ván — luôn tính lại từ dữ liệu thật.
 export function hiepDaXong(hiepId, danhSachVan) {
   return layVanCuaHiep(hiepId, danhSachVan).length >= 12;

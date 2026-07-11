@@ -3,6 +3,12 @@ import { RULESET_PRESETS } from './ruleset.js'
 
 const TEN_LOAI_3_LA = ['Mậu thầu', 'Đôi', 'Sám cô'];
 const TEN_LOAI_5_LA = ['Mậu thầu', 'Đôi', 'Thú', 'Sám cô', 'Sảnh', 'Thùng', 'Cù lũ', 'Tứ quý', 'Thùng phá sảnh'];
+// Chỉ số (loai) THỰC SỰ có thể có bonus riêng ở mỗi bảng — dùng để ẨN các
+// dòng không bao giờ có bonus (luôn = điểm gốc), giữ nguyên chỉ số mảng
+// TEN_LOAI_3_LA/TEN_LOAI_5_LA để tránh lệch vị trí.
+const LOAI_CO_THE_CO_BONUS_CHI_DAU = [2]; // chỉ Sám cô
+const LOAI_CO_THE_CO_BONUS_CHI_GIUA = [6, 7, 8]; // Cù lũ, Tứ quý, Thùng phá sảnh
+const LOAI_CO_THE_CO_BONUS_CHI_CUOI = [7, 8]; // Tứ quý, Thùng phá sảnh (Cù lũ KHÔNG có bonus ở Chi Cuối)
 const TEN_THANG_TRANG = [
   { ma: 'rongCuon', ten: 'Rồng cuốn (13 lá cùng chất)' },
   { ma: 'sanhRong', ten: 'Sảnh rồng (đủ 13 rank, khác chất)' },
@@ -33,23 +39,26 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
     });
   }
 
-  function veBangBonus(tenChi, nhan, danhSachTenLoai, dacBiet = []) {
+  function veBangBonus(tenChi, nhan, danhSachTenLoai, dacBiet = [], loaiChoPhep = null) {
     return (
       <div className="khoi-luat">
         <div className="khoi-luat-tieu-de">Bonus theo loại bài — {nhan}</div>
         <div className="bang-bonus">
-          {danhSachTenLoai.map((tenLoai, loai) => (
-            <div key={loai} className="dong-bonus">
-              <span>{tenLoai}</span>
-              <input
-                type="number"
-                value={ruleset.bonusTheoLoai[tenChi]?.[loai] || 0}
-                onChange={e => suaBonus(tenChi, loai, e.target.value)}
-              />
-            </div>
-          ))}
+          {danhSachTenLoai.map((tenLoai, loai) => {
+            if (loaiChoPhep && !loaiChoPhep.includes(loai)) return null; // ẩn dòng không thể có bonus
+            return (
+              <div key={loai} className="dong-bonus dong-thong-so">
+                <span>{tenLoai}</span>
+                <input
+                  type="number"
+                  value={ruleset.bonusTheoLoai[tenChi]?.[loai] || 0}
+                  onChange={e => suaBonus(tenChi, loai, e.target.value)}
+                />
+              </div>
+            );
+          })}
           {dacBiet.map(({ ma, ten }) => (
-            <div key={ma} className="dong-bonus dong-bonus-dac-biet">
+            <div key={ma} className="dong-bonus dong-bonus-dac-biet dong-thong-so">
               <span>{ten}</span>
               <input
                 type="number"
@@ -112,14 +121,14 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
         <div className="khoi-luat-tieu-de">Điểm gốc mỗi chi thắng/thua</div>
         <div className="dong-diem-goc">
           {['dau', 'giua', 'cuoi'].map(tenChi => (
-            <label key={tenChi}>
-              {tenChi === 'dau' ? 'Chi Đầu' : tenChi === 'giua' ? 'Chi Giữa' : 'Chi Cuối'}
+            <div key={tenChi} className="dong-thong-so">
+              <span>{tenChi === 'dau' ? 'Chi Đầu' : tenChi === 'giua' ? 'Chi Giữa' : 'Chi Cuối'}</span>
               <input
                 type="number"
                 value={ruleset.pointsPerChi[tenChi]}
                 onChange={e => suaDiemGoc(tenChi, e.target.value)}
               />
-            </label>
+            </div>
           ))}
         </div>
       </div>
@@ -135,7 +144,7 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
               r.thangTrang.enabled = e.target.checked;
             })}
           />
-          Bật luật thắng trắng (Ù ngay, không cần so từng chi)
+          Bật luật thắng trắng (thắng ngay, không cần so từng chi)
         </label>
         <label className="dong-checkbox">
           <input
@@ -148,8 +157,8 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
           />
           Tính theo mức Ăn sập làng (thay vì dùng bảng điểm cố định bên dưới)
         </label>
-        <label>
-          Mức phạt nếu Báo Ù sai (mỗi đối thủ)
+        <div className="dong-thong-so">
+          <span>Mức phạt nếu Báo thắng trắng sai (mỗi đối thủ)</span>
           <input
             type="number"
             value={ruleset.thangTrang?.phatBaoUSai ?? 6}
@@ -158,10 +167,10 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
               r.thangTrang.phatBaoUSai = Number(e.target.value) || 0;
             })}
           />
-        </label>
+        </div>
         <div className="bang-bonus">
           {TEN_THANG_TRANG.map(({ ma, ten }) => (
-            <div key={ma} className="dong-bonus">
+            <div key={ma} className="dong-bonus dong-thong-so">
               <span>{ten}</span>
               <input
                 type="number"
@@ -178,39 +187,21 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
         </div>
       </div>
 
-      {veBangBonus('cuoi', 'Chi Cuối (5 lá) — nguồn gốc để tính Chi Giữa', TEN_LOAI_5_LA, [
+      {veBangBonus('cuoi', 'Chi Cuối (5 lá)', TEN_LOAI_5_LA, [
         { ma: '7_A', ten: 'Tứ quý A (AAAA)' },
         { ma: '8_thuong', ten: 'Thùng phá sảnh Thượng (10-J-Q-K-A)' },
         { ma: '8_ha', ten: 'Thùng phá sảnh Hạ (A-2-3-4-5)' },
-      ])}
+      ], LOAI_CO_THE_CO_BONUS_CHI_CUOI)}
 
-      <div className="khoi-luat">
-        <div className="khoi-luat-tieu-de">Chi Giữa (5 lá) — tự động = 2 × Chi Cuối</div>
-        <div className="bang-bonus">
-          {['7', '7_A', '8', '8_thuong', '8_ha'].map(ma => {
-            const tenHienThi = {
-              '7': 'Tứ quý', '7_A': 'Tứ quý A',
-              '8': 'Thùng phá sảnh (thường)',
-              '8_thuong': 'Thùng phá sảnh Thượng', '8_ha': 'Thùng phá sảnh Hạ',
-            }[ma];
-            const giaTriCuoi = ruleset.bonusTheoLoai.cuoi?.[ma];
-            if (giaTriCuoi === undefined) return null;
-            return (
-              <div key={ma} className="dong-bonus dong-bonus-chi-doc">
-                <span>{tenHienThi}</span>
-                <span>{giaTriCuoi * 2}</span>
-              </div>
-            );
-          })}
-        </div>
-        <p className="ghi-chu-chi-giua">
-          Sửa số ở bảng "Chi Cuối" bên trên — Chi Giữa sẽ tự cập nhật theo.
-        </p>
-      </div>
+      {veBangBonus('giua', 'Chi Giữa (5 lá)', TEN_LOAI_5_LA, [
+        { ma: '7_A', ten: 'Tứ quý A (AAAA)' },
+        { ma: '8_thuong', ten: 'Thùng phá sảnh Thượng (10-J-Q-K-A)' },
+        { ma: '8_ha', ten: 'Thùng phá sảnh Hạ (A-2-3-4-5)' },
+      ], LOAI_CO_THE_CO_BONUS_CHI_GIUA)}
 
       {veBangBonus('dau', 'Chi Đầu (3 lá)', TEN_LOAI_3_LA, [
         { ma: '2_A', ten: 'Sám cô A (AAA)' },
-      ])}
+      ], LOAI_CO_THE_CO_BONUS_CHI_DAU)}
 
       <div className="khoi-luat">
         <div className="khoi-luat-tieu-de">Ăn sập</div>
@@ -222,14 +213,14 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
           />
           Bật thưởng ăn sập
         </label>
-        <label>
-          Hệ số nhân
+        <div className="dong-thong-so">
+          <span>Hệ số nhân</span>
           <input
             type="number"
             value={ruleset.sapBonus.multiplier}
             onChange={e => suaRuleset(r => { r.sapBonus.multiplier = Number(e.target.value) || 1; })}
           />
-        </label>
+        </div>
       </div>
 
       <div className="khoi-luat">
@@ -245,8 +236,8 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
           />
           Bật thưởng khi ăn sập TẤT CẢ đối thủ trong ván
         </label>
-        <label>
-          Hệ số nhân thêm
+        <div className="dong-thong-so">
+          <span>Hệ số nhân thêm</span>
           <input
             type="number"
             value={ruleset.sapLangBonus?.multiplier ?? 2}
@@ -255,7 +246,7 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
               r.sapLangBonus.multiplier = Number(e.target.value) || 1;
             })}
           />
-        </label>
+        </div>
       </div>
 
       <div className="khoi-luat">
@@ -303,8 +294,8 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
           />
           Tính điểm theo số lá Á sở hữu
         </label>
-        <label>
-          Điểm mỗi lá Á thêm (so với đối thủ)
+        <div className="dong-thong-so">
+          <span>Điểm mỗi lá Á thêm (so với đối thủ)</span>
           <input
             type="number"
             value={ruleset.diemA?.diem ?? 1}
@@ -313,7 +304,35 @@ function LuatChoi({ presetId, daTuyChinh, ruleset, presetRieng, onChonPreset, on
               r.diemA.diem = Number(e.target.value) || 0;
             })}
           />
+        </div>
+      </div>
+
+      <div className="khoi-luat">
+        <div className="khoi-luat-tieu-de">Giới hạn thời gian xếp bài (Chơi với AI)</div>
+        <label className="dong-checkbox">
+          <input
+            type="checkbox"
+            checked={ruleset.thoiGianXepBai?.batBuoc ?? false}
+            onChange={e => suaRuleset(r => {
+              if (!r.thoiGianXepBai) r.thoiGianXepBai = { batBuoc: true, giay: 60 };
+              r.thoiGianXepBai.batBuoc = e.target.checked;
+            })}
+          />
+          Bật đếm ngược — hết giờ tự động xác nhận
         </label>
+        <div className="dong-thong-so">
+          <span>Thời gian mỗi ván (giây, từ 30 đến 120)</span>
+          <input
+            type="number" min={30} max={120} step={15}
+            value={ruleset.thoiGianXepBai?.giay ?? 60}
+            disabled={!ruleset.thoiGianXepBai?.batBuoc}
+            onChange={e => suaRuleset(r => {
+              const gtri = Math.max(30, Math.min(120, Number(e.target.value) || 60));
+              if (!r.thoiGianXepBai) r.thoiGianXepBai = { batBuoc: true, giay: 60 };
+              r.thoiGianXepBai.giay = gtri;
+            })}
+          />
+        </div>
       </div>
 
       <button className="nut-reset-luat" onClick={onReset}>

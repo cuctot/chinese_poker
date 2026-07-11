@@ -146,12 +146,6 @@ function maLoaiChiTiet(danhGia, tenChi) {
 function diemMotChi(ruleset, tenChi, danhGiaBenThang) {
   const goc = ruleset.pointsPerChi[tenChi];
   const ma = maLoaiChiTiet(danhGiaBenThang, tenChi);
-
-  if (tenChi === 'giua') {
-    const bangCuoi = ruleset.bonusTheoLoai.cuoi || {};
-    if (Object.prototype.hasOwnProperty.call(bangCuoi, ma)) return bangCuoi[ma] * 2;
-    return goc;
-  }
   const bang = ruleset.bonusTheoLoai[tenChi] || {};
   if (Object.prototype.hasOwnProperty.call(bang, ma)) return bang[ma];
   return goc;
@@ -165,11 +159,6 @@ function demSoLaA(nguoiChoi) {
 function diemMotChiChiTiet(ruleset, tenChi, danhGiaBenThang) {
   const goc = ruleset.pointsPerChi[tenChi];
   const ma = maLoaiChiTiet(danhGiaBenThang, tenChi);
-  if (tenChi === 'giua') {
-    const bangCuoi = ruleset.bonusTheoLoai.cuoi || {};
-    if (Object.prototype.hasOwnProperty.call(bangCuoi, ma)) return { diem: bangCuoi[ma] * 2, ma };
-    return { diem: goc, ma };
-  }
   const bang = ruleset.bonusTheoLoai[tenChi] || {};
   if (Object.prototype.hasOwnProperty.call(bang, ma)) return { diem: bang[ma], ma };
   return { diem: goc, ma };
@@ -214,7 +203,7 @@ function soBai2Nguoi(ruleset, a, b) {
     diemA = diemHopLe; diemB = -diemHopLe;
     aSap = benHopLe === a; bSap = benHopLe === b;
 
-    dienGiai.push(`${benLung === a ? 'Bạn' : 'Đối thủ'} xếp bài KHÔNG HỢP LỆ (binh lủng) → thua trắng cả 3 chi.`);
+    dienGiai.push(`${benLung === a ? a.ten : b.ten} xếp bài KHÔNG HỢP LỆ (binh lủng) → thua trắng cả 3 chi.`);
     dienGiai.push(
       `Bên hợp lệ tính theo bài thật: Đầu(${tenLoaiChiTiet('dau', kqDau.ma)})=${kqDau.diem}, ` +
       `Giữa(${tenLoaiChiTiet('giua', kqGiua.ma)})=${kqGiua.diem}, Cuối(${tenLoaiChiTiet('cuoi', kqCuoi.ma)})=${kqCuoi.diem}` +
@@ -238,9 +227,9 @@ function soBai2Nguoi(ruleset, a, b) {
       + (soCuoi > 0 ? vCuoi : soCuoi < 0 ? -vCuoi : 0);
 
     dienGiai.push(
-      soDau === 0 ? 'Chi Đầu: hòa (0)' : `Chi Đầu: ${soDau > 0 ? 'Bạn' : 'Đối thủ'} thắng bằng ${tenLoaiChiTiet('dau', kqDau.ma)} → ${soDau > 0 ? '+' : '-'}${vDau}`,
-      soGiua === 0 ? 'Chi Giữa: hòa (0)' : `Chi Giữa: ${soGiua > 0 ? 'Bạn' : 'Đối thủ'} thắng bằng ${tenLoaiChiTiet('giua', kqGiua.ma)} → ${soGiua > 0 ? '+' : '-'}${vGiua}`,
-      soCuoi === 0 ? 'Chi Cuối: hòa (0)' : `Chi Cuối: ${soCuoi > 0 ? 'Bạn' : 'Đối thủ'} thắng bằng ${tenLoaiChiTiet('cuoi', kqCuoi.ma)} → ${soCuoi > 0 ? '+' : '-'}${vCuoi}`,
+      soDau === 0 ? 'Chi Đầu: hòa (0)' : `Chi Đầu: ${soDau > 0 ? a.ten : b.ten} thắng bằng ${tenLoaiChiTiet('dau', kqDau.ma)} → ${soDau > 0 ? '+' : '-'}${vDau}`,
+      soGiua === 0 ? 'Chi Giữa: hòa (0)' : `Chi Giữa: ${soGiua > 0 ? a.ten : b.ten} thắng bằng ${tenLoaiChiTiet('giua', kqGiua.ma)} → ${soGiua > 0 ? '+' : '-'}${vGiua}`,
+      soCuoi === 0 ? 'Chi Cuối: hòa (0)' : `Chi Cuối: ${soCuoi > 0 ? a.ten : b.ten} thắng bằng ${tenLoaiChiTiet('cuoi', kqCuoi.ma)} → ${soCuoi > 0 ? '+' : '-'}${vCuoi}`,
       `Cộng 3 chi: ${diemA >= 0 ? '+' : ''}${diemA}`
     );
 
@@ -249,7 +238,7 @@ function soBai2Nguoi(ruleset, a, b) {
     if (ruleset.sapBonus.enabled && (aSap || bSap)) {
       const truoc = diemA;
       diemA *= ruleset.sapBonus.multiplier;
-      dienGiai.push(`${aSap ? 'Bạn' : 'Đối thủ'} thắng cả 3 chi (ăn sập) → ${truoc} × ${ruleset.sapBonus.multiplier} = ${diemA}`);
+      dienGiai.push(`${aSap ? a.ten : b.ten} thắng cả 3 chi (ăn sập) → ${truoc} × ${ruleset.sapBonus.multiplier} = ${diemA}`);
     }
     diemB = -diemA;
   }
@@ -384,6 +373,37 @@ function coBaSanh(ca13La) {
   return false;
 }
 
+// Tìm 1 cách chia CỤ THỂ thỏa "Ba sảnh" (Đầu = 3 rank liên tiếp, Giữa/Cuối
+// mỗi chi 5 rank liên tiếp) — duyệt y hệt điều kiện `coBaSanh` đã dùng để
+// XÁC ĐỊNH loại thắng trắng, nhưng ở đây còn CẮT LUÔN lá cụ thể cho từng
+// chi để hiển thị, thay vì chỉ trả về true/false.
+function timBaSanh(ca13La) {
+  const theoRank = {};
+  ca13La.forEach(l => { (theoRank[l.rank] ??= []).push(l); });
+
+  const capDau = [];
+  for (let r = 2; r <= 12; r++) capDau.push([r, r + 1, r + 2]);
+  const capGiuaCuoi = [];
+  for (let r = 2; r <= 10; r++) capGiuaCuoi.push([r, r + 1, r + 2, r + 3, r + 4]);
+
+  for (const d of capDau) {
+    for (const g of capGiuaCuoi) {
+      for (const c of capGiuaCuoi) {
+        const canDem = {};
+        [...d, ...g, ...c].forEach(r => { canDem[r] = (canDem[r] || 0) + 1; });
+        const duLa = Object.entries(canDem).every(([r, soCan]) => (theoRank[r]?.length || 0) >= soCan);
+        if (!duLa) continue;
+
+        const con = {};
+        Object.entries(theoRank).forEach(([r, ds]) => { con[r] = [...ds]; });
+        const layLa = r => con[r].pop();
+        return { chiDau: d.map(layLa), chiGiua: g.map(layLa), chiCuoi: c.map(layLa) };
+      }
+    }
+  }
+  return null;
+}
+
 const TEN_THANG_TRANG = {
   rongCuon: 'Rồng cuốn',
   sanhRong: 'Sảnh rồng',
@@ -431,6 +451,11 @@ export function xepBaiThangTrangDeXem(ca13La, loai) {
     if (idx3 !== -1 && idx5s.length === 2) {
       return { chiDau: theoChat[idx3], chiGiua: theoChat[idx5s[0]], chiCuoi: theoChat[idx5s[1]] };
     }
+  }
+
+  if (loai === 'baSanh') {
+    const ketQua = timBaSanh(ca13La);
+    if (ketQua) return ketQua;
   }
 
   if (loai === 'rongCuon' || loai === 'sanhRong') {
@@ -508,21 +533,22 @@ export function tinhDiemThangTrang(nguoiChoi, ruleset) {
   return tinhDiemTuKetQuaLoai(nguoiChoi, ruleset, ketQuaLoai);
 }
 
-// Tự động kiểm tra thắng trắng CHỈ CHO 3 ĐỐI THỦ AI — người chơi tên
-// "Bạn" KHÔNG được tự động kiểm tra nữa (dù bài họ có đủ điều kiện), họ
-// phải chủ động bấm "Báo Ù" (xem tinhDiemBaoUDung/tinhDiemBaoUSai).
+// Tự động kiểm tra thắng trắng CHỈ CHO 3 ĐỐI THỦ AI — người chơi (LUÔN ở
+// vị trí index 0 của `nguoiChoi`, tên tùy người chơi tự chọn) KHÔNG được
+// tự động kiểm tra nữa (dù bài họ có đủ điều kiện), họ phải chủ động bấm
+// "Báo Ù" (xem tinhDiemBaoUDung/tinhDiemBaoUSai).
 export function tinhDiemThangTrangAI(nguoiChoi, ruleset) {
   if (!ruleset.thangTrang || ruleset.thangTrang.enabled === false) return null;
-  const ketQuaLoai = nguoiChoi.map(p => p.ten === 'Bạn' ? null : kiemTraThangTrang(p.ca13La));
+  const ketQuaLoai = nguoiChoi.map((p, i) => i === 0 ? null : kiemTraThangTrang(p.ca13La));
   if (!ketQuaLoai.some(l => l !== null)) return null;
   return tinhDiemTuKetQuaLoai(nguoiChoi, ruleset, ketQuaLoai);
 }
 
-// Người chơi CHỦ ĐỘNG báo Ù — kiểm tra THẬT bài của "Bạn". Trả về null
-// nếu bài KHÔNG đủ điều kiện (App.jsx khi đó phải gọi tinhDiemBaoUSai
-// thay vì hàm này).
+// Người chơi CHỦ ĐỘNG báo Ù — kiểm tra THẬT bài của người chơi (index 0).
+// Trả về null nếu bài KHÔNG đủ điều kiện (App.jsx khi đó phải gọi
+// tinhDiemBaoUSai thay vì hàm này).
 export function tinhDiemBaoUDung(nguoiChoi, ruleset) {
-  const ketQuaLoai = nguoiChoi.map(p => p.ten === 'Bạn' ? kiemTraThangTrang(p.ca13La) : null);
+  const ketQuaLoai = nguoiChoi.map((p, i) => i === 0 ? kiemTraThangTrang(p.ca13La) : null);
   if (!ketQuaLoai[0]) return null;
   return tinhDiemTuKetQuaLoai(nguoiChoi, ruleset, ketQuaLoai);
 }
@@ -586,10 +612,20 @@ export function duyetCachChiaHopLe(ca13La, ruleset) {
 // phỏng đối thủ).
 export function xepBaiTheoPhongCach(ca13La, ruleset, phongCach) {
   const tatCaHopLe = duyetCachChiaHopLe(ca13La, ruleset);
-  let totNhat = null, diemTotNhat = -Infinity;
+  let totNhat = null, diemTotNhat = -Infinity, dDauTotNhat = null;
   for (const cach of tatCaHopLe) {
     const diem = chamDiemCachChia(cach.chiDau, cach.chiGiua, cach.chiCuoi, ruleset, phongCach);
-    if (diem > diemTotNhat) { diemTotNhat = diem; totNhat = cach; }
+    if (diem < diemTotNhat) continue;
+    const dDau = danhGia3La(cach.chiDau);
+    // Hòa TỔNG điểm với cách đang giữ — ưu tiên cách có Chi Đầu MẠNH HƠN
+    // (vd Đôi thay vì Mậu thầu). Xảy ra rõ nhất ở 'toiDaHoaDiem': ruleset
+    // chỉ thưởng Sám cô/Sám cô A ở Chi Đầu, nên Mậu thầu và Đôi (thường)
+    // cho ĐÚNG CÙNG 1 điểm — không có lý do gì để "phí" 1 Đôi có sẵn khi
+    // nó không ảnh hưởng gì tới điểm 2 chi kia, dù ruleset không thưởng
+    // thêm gì, Đôi vẫn giúp Chi Đầu chắc thắng hơn khi so bài thật.
+    if (diem > diemTotNhat || soSanh(dDau, dDauTotNhat) > 0) {
+      diemTotNhat = diem; totNhat = cach; dDauTotNhat = dDau;
+    }
   }
   return totNhat;
 }
@@ -640,21 +676,21 @@ export function xepBaiChuyenNghiep(ca13La, laCon39, ruleset, { soUngVien = 15, s
   return totNhat;
 }
 
-// Người chơi báo Ù nhưng SAI (bài không đủ điều kiện) — phạt 1 mức cố
-// định (ruleset.thangTrang.phatBaoUSai) cho MỖI đối thủ.
+// Người chơi (index 0) báo Ù nhưng SAI (bài không đủ điều kiện) — phạt 1
+// mức cố định (ruleset.thangTrang.phatBaoUSai) cho MỖI đối thủ.
 export function tinhDiemBaoUSai(nguoiChoi, ruleset) {
   const mucPhat = ruleset.thangTrang?.phatBaoUSai ?? 6;
   const diem = {};
   const dienGiaiTheoDoiThu = {};
   nguoiChoi.forEach(p => { diem[p.ten] = 0; dienGiaiTheoDoiThu[p.ten] = []; });
 
-  nguoiChoi.forEach(doiThu => {
-    if (doiThu.ten === 'Bạn') return;
-    diem['Bạn'] -= mucPhat;
+  const tenNguoiChoi = nguoiChoi[0].ten;
+  nguoiChoi.slice(1).forEach(doiThu => {
+    diem[tenNguoiChoi] -= mucPhat;
     diem[doiThu.ten] += mucPhat;
-    const dg = [`Bạn báo Ù nhưng SAI (bài không đủ điều kiện thắng trắng) → phạt ${mucPhat} cho ${doiThu.ten}`];
-    dienGiaiTheoDoiThu['Bạn'].push({ doiThu: doiThu.ten, dienGiai: dg, diemNhanDuoc: -mucPhat });
-    dienGiaiTheoDoiThu[doiThu.ten].push({ doiThu: 'Bạn', dienGiai: dg, diemNhanDuoc: mucPhat });
+    const dg = [`${tenNguoiChoi} báo thắng trắng nhưng SAI (bài không đủ điều kiện thắng trắng) → phạt ${mucPhat} cho ${doiThu.ten}`];
+    dienGiaiTheoDoiThu[tenNguoiChoi].push({ doiThu: doiThu.ten, dienGiai: dg, diemNhanDuoc: -mucPhat });
+    dienGiaiTheoDoiThu[doiThu.ten].push({ doiThu: tenNguoiChoi, dienGiai: dg, diemNhanDuoc: mucPhat });
   });
 
   return { diem, dienGiaiTheoDoiThu };
