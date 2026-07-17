@@ -9,8 +9,16 @@ export default defineConfig({
   // cập vào bằng địa chỉ IP hiện ra ở dòng "Network" khi chạy `npm run dev`.
   server: {
     host: true,
+    port: 5183,
+    strictPort: true, // báo lỗi nếu 5183 đang bị chiếm, thay vì tự đổi sang port khác
+    // Vite mặc định chặn Host header lạ (chỉ tin IP) để chống DNS-rebinding.
+    // Cho phép truy cập qua hostname .local (Bonjour/mDNS) từ máy khác trong LAN.
+    allowedHosts: ['.local'],
   },
   preview: {
     host: true,
+    port: 5183,
+    strictPort: true,
+    allowedHosts: ['.local'],
   },
 })
