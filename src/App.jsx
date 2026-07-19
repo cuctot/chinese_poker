@@ -316,6 +316,11 @@ function App() {
     setTrang(trangMoi);
   }
 
+  async function dangXuat() {
+    await supabase.auth.signOut();
+    setNhomDangChon(null);
+  }
+
   // "Dừng chơi": bỏ dở luôn ván đang xếp/xem (không lưu lại gì để chơi
   // tiếp), về trang chủ. Ván ĐÃ xác nhận/ghi log rồi thì không mất gì —
   // vẫn còn nguyên trong Hiệp.
@@ -388,6 +393,11 @@ function App() {
   // hàm tự return sớm khi có ketQuaThangTrang) sau khi ván đã thắng trắng
   // xong. Tạm dừng khi đang mở hộp thoại Báo Ù, tiếp tục ngay khi đóng.
   useEffect(() => {
+    // Chỉ chạy khi thực sự đang ở màn chơi 1 ván AI (trang === 'choiAI' &&
+    // daChonVan) — thiếu điều kiện này khiến đồng hồ chạy NGẦM ở MỌI màn
+    // hình (kể cả Trang chủ/Đăng nhập), và khi về 0 gọi xacNhanBai() dù
+    // chưa từng bắt đầu ván nào -> crash (hiepAIHienTai null).
+    if (!(trang === 'choiAI' && daChonVan)) return;
     if (vanDaKetThuc) return;
     if (!ruleset.thoiGianXepBai?.batBuoc) return;
     if (dangXacNhanBaoU) return;
@@ -400,7 +410,7 @@ function App() {
     const timer = setTimeout(() => setGiayConLai(g => g - 1), 1000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [giayConLai, vanDaKetThuc, dangXacNhanBaoU, ruleset.thoiGianXepBai?.batBuoc]);
+  }, [trang, daChonVan, giayConLai, vanDaKetThuc, dangXacNhanBaoU, ruleset.thoiGianXepBai?.batBuoc]);
 
   // Phát hiện 1 hiệp AI còn DỞ DANG (chưa đủ 12 ván) từ lần chơi trước, để
   // màn ChonVan cho phép "Tiếp hiệp cũ". Chỉ tính khi đang ở đúng màn chọn
@@ -650,7 +660,7 @@ function App() {
          onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
 
       {trang === 'trangChu' && (
-        <TrangChu onDieuHuong={dieuHuong} />
+        <TrangChu onDieuHuong={dieuHuong} nguoiDangNhap={nguoiDangNhap} onDangXuat={dangXuat} />
       )}
 
       {trang === 'luatChoi' && (

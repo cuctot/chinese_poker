@@ -3,7 +3,7 @@
 // chỉ nhận 1 hàm onDieuHuong(tenTrang) để báo lên App.jsx khi người chơi
 // bấm 1 nút điều hướng.
 
-function TrangChu({ onDieuHuong }) {
+function TrangChu({ onDieuHuong, nguoiDangNhap, onDangXuat }) {
   return (
     <div className="trang-chu">
       <div className="logo-game">
@@ -15,7 +15,13 @@ function TrangChu({ onDieuHuong }) {
         </svg>
       </div>
       <h1 className="ten-game">Mậu Binh</h1>
-      <div className="phien-ban">Phiên bản V0.11</div>
+      <div className="phien-ban">Phiên bản V0.12</div>
+      {nguoiDangNhap && (
+        <div className="thong-tin-tai-khoan">
+          <span>{nguoiDangNhap.email}</span>
+          <button className="nut-dang-xuat" onClick={onDangXuat}>Đăng xuất</button>
+        </div>
+      )}
 
       <div className="danh-sach-dieu-huong">
         <button className="nut-dieu-huong" onClick={() => onDieuHuong('choiAI')}>

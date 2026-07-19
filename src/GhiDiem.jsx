@@ -137,6 +137,11 @@ function GhiDiem({ nhom }) {
   }
 
   const chuaDuTen = tenNguoiChoi.some(t => !t.trim());
+  // Tên trùng nhau sẽ làm 2 người dùng CHUNG 1 khóa điểm (diemNhap/tongKet
+  // đều tra theo tên) — coi như 1 người, đè điểm lên nhau âm thầm. Chặn
+  // hẳn trước khi vào hiệp, không để phát hiện muộn giữa chừng ván.
+  const tenSachDeSoTrung = tenNguoiChoi.map(t => t.trim().toLowerCase()).filter(Boolean);
+  const coTenTrung = new Set(tenSachDeSoTrung).size !== tenSachDeSoTrung.length;
   const vanCuaHiepDangGhi = hiepDangGhi ? layVanCuaHiep(hiepDangGhi.id, danhSachVan) : [];
   const tongCongDon = tinhTongKetHiep(vanCuaHiepDangGhi);
 
@@ -269,7 +274,8 @@ function GhiDiem({ nhom }) {
           <input type="text" placeholder="Chú thích (không bắt buộc)..." value={chuThich}
                  onChange={e => setChuThich(e.target.value)}
                  style={{ display: 'block', width: '100%', marginBottom: 8 }} />
-          <button className="nut-choi" disabled={chuaDuTen || dangLuu} onClick={batDauHiepMoi}>
+          {coTenTrung && <p className="loi-dang-nhap">2 người chơi đang trùng tên — sửa lại cho khác nhau.</p>}
+          <button className="nut-choi" disabled={chuaDuTen || coTenTrung || dangLuu} onClick={batDauHiepMoi}>
             {dangLuu ? 'Đang tạo...' : 'Bắt đầu'}
           </button>
         </div>
