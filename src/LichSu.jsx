@@ -3,6 +3,7 @@ import {
   docDanhSach, KHOA_HIEP, KHOA_VAN,
   layVanCuaHiep, tinhTongKetHiep, hiepDaXong,
 } from './lichSuChoi.js'
+import { useDuLieuNhom } from './lichSuNhom.js'
 import HangBai from './HangBai.jsx'
 
 function dinhDangThoiGianAnToan(timestamp) {
@@ -34,14 +35,23 @@ function nhomHiepThanhBang(danhSachHiepNguon) {
   return nhom;
 }
 
-function LichSu() {
-  const [danhSachHiep] = useState(() => docDanhSach(KHOA_HIEP));
-  const [danhSachVan] = useState(() => docDanhSach(KHOA_VAN));
+function LichSu({ nhom }) {
+  // Tab "Chơi với AI" vẫn đọc localStorage như cũ (chơi 1 mình, không
+  // cần chia sẻ). Tab "Ghi điểm" (thatNgoai) đọc từ nhóm đã chọn qua
+  // Supabase — cùng hook `useDuLieuNhom` dùng ở GhiDiem.jsx.
+  const [danhSachHiepAI] = useState(() => docDanhSach(KHOA_HIEP));
+  const [danhSachVanAI] = useState(() => docDanhSach(KHOA_VAN));
+  const { danhSachHiep: danhSachHiepNhom, danhSachVan: danhSachVanNhom,
+          dangTai: dangTaiNhom, loi: loiNhom } = useDuLieuNhom(nhom?.id ?? null);
 
   const [tabDangXem, setTabDangXem] = useState('thatNgoai');
   const [hiepMoRong, setHiepMoRong] = useState(null);
   const [vanAIDangXem, setVanAIDangXem] = useState(null);
   const [trangHienTai, setTrangHienTai] = useState(0);
+
+  const danhSachHiep = tabDangXem === 'choiAI' ? danhSachHiepAI : danhSachHiepNhom;
+  const danhSachVan = tabDangXem === 'choiAI' ? danhSachVanAI : danhSachVanNhom;
+  const xemThatNgoaiMaChuaSanSang = tabDangXem === 'thatNgoai' && (!nhom || dangTaiNhom || loiNhom);
 
   const SO_HIEP_MOI_TRANG = 10;
   const hiepDungTab = danhSachHiep.filter(h => h.nguon === tabDangXem);
@@ -202,9 +212,17 @@ function LichSu() {
                 onClick={() => { setTabDangXem('choiAI'); setVanAIDangXem(null); setHiepMoRong(null); setTrangHienTai(0); }}>Chơi với AI</button>
       </div>
 
-      {!vanAIDangXem && cacBang.map(renderBangHiep)}
+      {tabDangXem === 'thatNgoai' && !nhom && (
+        <div className="khoi-luat"><p>Chưa chọn nhóm chơi — vào Ghi điểm để chọn nhóm trước.</p></div>
+      )}
+      {tabDangXem === 'thatNgoai' && nhom && dangTaiNhom && <p>Đang tải...</p>}
+      {tabDangXem === 'thatNgoai' && nhom && loiNhom && (
+        <p className="loi-dang-nhap">Lỗi kết nối: {loiNhom} — thử lại sau.</p>
+      )}
 
-      {!vanAIDangXem && (
+      {!vanAIDangXem && !xemThatNgoaiMaChuaSanSang && cacBang.map(renderBangHiep)}
+
+      {!vanAIDangXem && !xemThatNgoaiMaChuaSanSang && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 12 }}>
           <button className="nut-choi" disabled={trangHienTai === 0}
                   onClick={() => setTrangHienTai(t => t - 1)}>&lt;&lt;</button>

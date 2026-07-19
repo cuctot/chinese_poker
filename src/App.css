@@ -76,6 +76,23 @@
   margin: 0 auto;
 }
 
+.trang-dang-nhap {
+  max-width: 320px;
+  margin: 0 auto;
+  padding-top: 60px;
+}
+
+.trang-dang-nhap h2 {
+  text-align: center;
+  color: #f0c040;
+}
+
+.loi-dang-nhap {
+  font-size: 13px;
+  color: #f87171;
+  margin: 4px 0 12px;
+}
+
 .logo-game {
   margin-bottom: 12px;
 }

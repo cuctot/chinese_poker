@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import {
-  taoHiepMoi, taoVanMoi, nguoiChiaChoVan, tongDiemHopLe, tinhTongKetHiep,
-  layVanCuaHiep, hiepDaXong, layHiepDangDoHoacNull, themVanVaoLichSu,
-  docDanhSach, ghiDanhSach, KHOA_HIEP, KHOA_VAN,
+  nguoiChiaChoVan, tongDiemHopLe, tinhTongKetHiep,
+  layVanCuaHiep, hiepDaXong, layHiepDangDoHoacNull,
 } from './lichSuChoi.js'
-
-const NGUON = 'thatNgoai';
+import { useDuLieuNhom } from './lichSuNhom.js'
 
 function dinhDangGioNgay(ts) {
   const d = new Date(ts);
@@ -14,11 +12,10 @@ function dinhDangGioNgay(ts) {
   return `${gio}:${phut} ${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-function GhiDiem() {
-  const [danhSachHiep, setDanhSachHiep] = useState(() => docDanhSach(KHOA_HIEP));
-  const [danhSachVan, setDanhSachVan] = useState(() => docDanhSach(KHOA_VAN));
+function GhiDiem({ nhom }) {
+  const { danhSachHiep, danhSachVan, dangTai, loi: loiTai, themHiep, themVan } = useDuLieuNhom(nhom?.id ?? null);
 
-  const hiepDangDo = layHiepDangDoHoacNull(danhSachHiep, danhSachVan, NGUON);
+  const hiepDangDo = layHiepDangDoHoacNull(danhSachHiep, danhSachVan, 'thatNgoai');
 
   const [dangNhapTen, setDangNhapTen] = useState(false);
   const [tenNguoiChoi, setTenNguoiChoi] = useState(() => hiepDangDo ? [...hiepDangDo.nguoiChoi] : ['', '', '', '']);
@@ -30,6 +27,8 @@ function GhiDiem() {
 
   const [hiepDangGhi, setHiepDangGhi] = useState(null);
   const [diemNhap, setDiemNhap] = useState({});
+  const [loi, setLoi] = useState('');
+  const [dangLuu, setDangLuu] = useState(false);
   // Mốc thời gian THẬT của ván đang nhập — ghi lại đúng lúc số đầu tiên
   // được gõ vào (không phải lúc bấm "Lưu ván này", có thể trễ vài chục
   // giây do gõ 4 số) — đây mới là thời điểm ván đó THỰC SỰ vừa đánh xong.
@@ -69,7 +68,7 @@ function GhiDiem() {
     setThoiDiemBatDauNhapVan(prev => prev ?? Date.now());
   }
 
-  function batDauHiepMoi() {
+  async function batDauHiepMoi() {
     const tenSach = tenNguoiChoi.map(t => t.trim());
     if (tenSach.some(t => !t)) return;
     // Xoay vòng danh sách để bắt đầu ĐÚNG từ người được chọn chia đầu
@@ -77,14 +76,17 @@ function GhiDiem() {
     // giữa 4 vị trí (vd chọn Vị trí 3 chia trước → thứ tự chia thành
     // Vị trí 3 → 4 → 1 → 2, đúng chiều ngồi trên bàn).
     const thuTuXoayVong = [0, 1, 2, 3].map(i => tenSach[(nguoiChiaDauIdx + i) % 4]);
-    const hiepMoi = taoHiepMoi(NGUON, thuTuXoayVong, chuThich.trim());
-    const dsHiepMoi = [...danhSachHiep, hiepMoi];
-    setDanhSachHiep(dsHiepMoi);
-    ghiDanhSach(KHOA_HIEP, dsHiepMoi);
-
-    setDangNhapTen(false);
-    setHiepDangGhi(hiepMoi);
-    moDiemRong(tenSach);
+    setLoi(''); setDangLuu(true);
+    try {
+      const hiepMoi = await themHiep(thuTuXoayVong, chuThich.trim());
+      setDangNhapTen(false);
+      setHiepDangGhi(hiepMoi);
+      moDiemRong(tenSach);
+    } catch (e) {
+      setLoi(e.message);
+    } finally {
+      setDangLuu(false);
+    }
   }
 
   function tiepTucHiepDo() {
@@ -92,7 +94,7 @@ function GhiDiem() {
     moDiemRong(hiepDangDo.nguoiChoi);
   }
 
-  function luuVan() {
+  async function luuVan() {
     const diemSo = {};
     for (const ten of hiepDangGhi.nguoiChoi) {
       const gtri = Number(diemNhap[ten]);
@@ -107,24 +109,31 @@ function GhiDiem() {
     const soVanHienTai = layVanCuaHiep(hiepDangGhi.id, danhSachVan).length + 1;
     const { nguoiChia, lanChia } = nguoiChiaChoVan(hiepDangGhi.nguoiChoi, soVanHienTai);
 
-    const vanMoi = taoVanMoi({
-      hiepId: hiepDangGhi.id, soThuTuTrongHiep: soVanHienTai, lanChiaThu: lanChia,
-      nguoiChia, nguon: NGUON, diem: diemSo, thoiGian: thoiDiemBatDauNhapVan ?? Date.now(),
-    });
-    const dsVanMoi = themVanVaoLichSu(vanMoi, danhSachVan);
-    setDanhSachVan(dsVanMoi);
-    ghiDanhSach(KHOA_VAN, dsVanMoi);
-
-    moDiemRong(hiepDangGhi.nguoiChoi);
+    setLoi(''); setDangLuu(true);
+    try {
+      await themVan({
+        hiepId: hiepDangGhi.id, soThuTuTrongHiep: soVanHienTai, lanChiaThu: lanChia,
+        nguoiChia, diem: diemSo, thoiGian: thoiDiemBatDauNhapVan ?? Date.now(),
+      });
+      moDiemRong(hiepDangGhi.nguoiChoi);
+    } catch (e) {
+      setLoi(e.message);
+    } finally {
+      setDangLuu(false);
+    }
   }
 
-  function hiepMoiTiepTheo() {
-    const hiepMoi = taoHiepMoi(NGUON, hiepDangGhi.nguoiChoi, '');
-    const dsHiepMoi = [...danhSachHiep, hiepMoi];
-    setDanhSachHiep(dsHiepMoi);
-    ghiDanhSach(KHOA_HIEP, dsHiepMoi);
-    setHiepDangGhi(hiepMoi);
-    moDiemRong(hiepMoi.nguoiChoi);
+  async function hiepMoiTiepTheo() {
+    setLoi(''); setDangLuu(true);
+    try {
+      const hiepMoi = await themHiep(hiepDangGhi.nguoiChoi, '');
+      setHiepDangGhi(hiepMoi);
+      moDiemRong(hiepMoi.nguoiChoi);
+    } catch (e) {
+      setLoi(e.message);
+    } finally {
+      setDangLuu(false);
+    }
   }
 
   const chuaDuTen = tenNguoiChoi.some(t => !t.trim());
@@ -197,9 +206,31 @@ function GhiDiem() {
     );
   }
 
+  // Gate ĐẶT SAU toàn bộ hook ở trên — bắt buộc theo Rules of Hooks.
+  if (!nhom) {
+    return (
+      <div className="trang-ghi-diem">
+        <h2>Ghi điểm</h2>
+        <div className="khoi-luat"><p>Chọn một nhóm chơi trước khi ghi điểm.</p></div>
+      </div>
+    );
+  }
+  if (dangTai) {
+    return <div className="trang-ghi-diem"><h2>Ghi điểm</h2><p>Đang tải...</p></div>;
+  }
+  if (loiTai) {
+    return (
+      <div className="trang-ghi-diem">
+        <h2>Ghi điểm</h2>
+        <p className="loi-dang-nhap">Lỗi kết nối: {loiTai} — thử lại sau.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="trang-ghi-diem">
       <h2>Ghi điểm</h2>
+      {loi && <p className="loi-dang-nhap">{loi}</p>}
 
       {!hiepDangGhi && !dangNhapTen && (
         <div className="khoi-luat">
@@ -238,7 +269,9 @@ function GhiDiem() {
           <input type="text" placeholder="Chú thích (không bắt buộc)..." value={chuThich}
                  onChange={e => setChuThich(e.target.value)}
                  style={{ display: 'block', width: '100%', marginBottom: 8 }} />
-          <button className="nut-choi" disabled={chuaDuTen} onClick={batDauHiepMoi}>Bắt đầu</button>
+          <button className="nut-choi" disabled={chuaDuTen || dangLuu} onClick={batDauHiepMoi}>
+            {dangLuu ? 'Đang tạo...' : 'Bắt đầu'}
+          </button>
         </div>
       )}
 
@@ -249,7 +282,9 @@ function GhiDiem() {
             {nguoiChiaChoVan(hiepDangGhi.nguoiChoi, vanCuaHiepDangGhi.length + 1).nguoiChia}
           </div>
           {renderBangDiem(true)}
-          <button className="nut-choi" onClick={luuVan}>Lưu ván này</button>
+          <button className="nut-choi" disabled={dangLuu} onClick={luuVan}>
+            {dangLuu ? 'Đang lưu...' : 'Lưu ván này'}
+          </button>
         </div>
       )}
 
@@ -258,7 +293,9 @@ function GhiDiem() {
           <div className="khoi-luat-tieu-de tieu-de-het-hiep">Tổng kết Hiệp {hiepDangGhi.soThuTu}</div>
           {renderBangDiem(false)}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <button className="nut-choi" onClick={hiepMoiTiepTheo}>Hiệp tiếp theo</button>
+            <button className="nut-choi" disabled={dangLuu} onClick={hiepMoiTiepTheo}>
+              {dangLuu ? 'Đang tạo...' : 'Hiệp tiếp theo'}
+            </button>
             <button className="nut-choi" onClick={() => setHiepDangGhi(null)}>Kết thúc</button>
           </div>
         </div>

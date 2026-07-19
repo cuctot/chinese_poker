@@ -3,6 +3,9 @@ import './App.css'
 import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai, xepBaiThangTrangDeXem, xepBaiChuyenNghiep } from './cardEngine.js'
 import { DANH_SACH_NHAN_VAT_MAC_DINH, aiXepBaiTheoNhanVat } from './nhanVatAI.js'
 import { RULESET_PRESETS, layRulesetTuPreset, isValidRuleset, damBaoBonusGiuaDayDu } from './ruleset.js'
+import { supabase } from './supabaseClient.js'
+import DangNhap from './DangNhap.jsx'
+import NhomChoi from './NhomChoi.jsx'
 import TheBaiDon from './TheBaiDon.jsx'
 import HangBai from './HangBai.jsx'
 import LuatChoi from './LuatChoi.jsx'
@@ -20,6 +23,7 @@ import {
 const BAT_DAU = { dau: 0, giua: 3, cuoi: 8 };
 const KHOA_LUU_RULESET = 'mauBinhLuatChoi';
 const KHOA_LUU_PRESET_RIENG = 'mauBinhLuatTuyChinh';
+const KHOA_NHOM_DANG_CHON = 'mauBinhNhomDangChonId';
 const NGUON = 'choiAI';
 const TEN_THANG_TRANG_HIEN_THI = {
   rongCuon: 'Rồng cuốn', sanhRong: 'Sảnh rồng', namDoiMotSam: 'Năm đôi 1 sám',
@@ -101,6 +105,31 @@ function layTenDoiThu(hiep) {
 }
 
 function App() {
+  // V12: cổng đăng nhập — chỉ vào được nội dung chính khi đã có phiên
+  // Supabase hợp lệ. `dangTaiPhien` tránh nháy màn Đăng nhập 1 chớp lúc
+  // mới mở app trong lúc đang kiểm tra session cũ còn hiệu lực hay không.
+  const [nguoiDangNhap, setNguoiDangNhap] = useState(null);
+  const [dangTaiPhien, setDangTaiPhien] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setNguoiDangNhap(data.session?.user ?? null);
+      setDangTaiPhien(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_su, session) => {
+      setNguoiDangNhap(session?.user ?? null);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+  // Nhóm chơi đang chọn để xem/ghi ở Ghi điểm + Lịch sử. Nhớ lại lựa
+  // chọn qua localStorage — chỉ lưu id, NhomChoi tự khớp lại với danh
+  // sách nhóm tải từ Supabase (tránh phải chọn lại giữa ván đang chơi
+  // dở mỗi lần mở app).
+  const [nhomDangChon, setNhomDangChon] = useState(null);
+  useEffect(() => {
+    if (nhomDangChon) localStorage.setItem(KHOA_NHOM_DANG_CHON, nhomDangChon.id);
+  }, [nhomDangChon]);
+
   const [tatCaBai, setTatCaBai] = useState(() => chiaBai());
   const boBaiCuaToi = tatCaBai[0];
 
@@ -610,6 +639,12 @@ function App() {
     );
   }
 
+  // Cổng đăng nhập ĐẶT SAU toàn bộ hook ở trên (useState/useEffect/useMemo)
+  // — bắt buộc theo Rules of Hooks, vì mọi hook phải luôn được gọi đều ở
+  // mỗi lần render, không được đặt sau 1 return có điều kiện.
+  if (dangTaiPhien) return <div className="trang"><p>Đang tải...</p></div>;
+  if (!nguoiDangNhap) return <div className="trang"><DangNhap /></div>;
+
   return (
     <div className="trang" style={{ touchAction: 'none' }}
          onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
@@ -642,7 +677,9 @@ function App() {
           <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
             ← Trang chủ
           </button>
-          <GhiDiem />
+          <NhomChoi nguoiDangNhap={nguoiDangNhap} onChonNhom={setNhomDangChon}
+                    idNhomGoiY={localStorage.getItem(KHOA_NHOM_DANG_CHON)} />
+          <GhiDiem nhom={nhomDangChon} />
         </>
       )}
 
@@ -651,7 +688,7 @@ function App() {
           <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
             ← Trang chủ
           </button>
-          <LichSu />
+          <LichSu nhom={nhomDangChon} />
         </>
       )}
 
