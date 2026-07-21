@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import './App.css'
-import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai, xepBaiThangTrangDeXem, xepBaiChuyenNghiep } from './cardEngine.js'
+import { chiaBai, tinhDiem, tinhDiemThangTrangAI, tinhDiemBaoUDung, tinhDiemBaoUSai, xepBaiThangTrangDeXem, xepBaiChuyenNghiep, tinhChiTietCaVan } from './cardEngine.js'
 import { DANH_SACH_NHAN_VAT_MAC_DINH, aiXepBaiTheoNhanVat } from './nhanVatAI.js'
 import { RULESET_PRESETS, layRulesetTuPreset, isValidRuleset, damBaoBonusGiuaDayDu } from './ruleset.js'
 import { supabase } from './supabaseClient.js'
@@ -13,11 +13,12 @@ import TrangChu from './TrangChu.jsx'
 import ChonVan from './ChonVan.jsx'
 import GhiDiem from './GhiDiem.jsx'
 import LichSu from './LichSu.jsx'
+import PhanTich from './PhanTich.jsx'
 import {
-  taoHiepMoi, taoVanMoi, themVanVaoLichSu, layHiepDangDoHoacNull,
-  docDanhSach, ghiDanhSach, KHOA_HIEP, KHOA_VAN,
+  layHiepDangDoHoacNull,
   nguoiChiaChoVan, tinhTongKetHiep, layVanCuaHiep, layTenNguoiChoiGanNhat,
 } from './lichSuChoi.js'
+import { useDuLieuAI } from './lichSuAI.js'
 
 // 13 ô cố định: index 0-2 = Chi Đầu, 3-7 = Chi Giữa, 8-12 = Chi Cuối
 const BAT_DAU = { dau: 0, giua: 3, cuoi: 8 };
@@ -147,20 +148,20 @@ function App() {
   const [dangGoiY, setDangGoiY] = useState(false);
   const [ketQuaGoiY, setKetQuaGoiY] = useState(null);
   const [goiYLucXacNhan, setGoiYLucXacNhan] = useState(null);
-  const [trang, setTrang] = useState('trangChu'); // 'trangChu' | 'choiAI' | 'luatChoi' | 'ghiDiem' | 'lichSu'
+  const [trang, setTrang] = useState('trangChu'); // 'trangChu' | 'choiAI' | 'luatChoi' | 'ghiDiem' | 'lichSu' | 'phanTich'
   const [daChonVan, setDaChonVan] = useState(false);
   const [trangThaiLuat, setTrangThaiLuat] = useState(() => docTrangThaiLuat());
   const { presetId, ruleset, daTuyChinh } = trangThaiLuat;
   const boBaiDoiThu = useMemo(() => [tatCaBai[1], tatCaBai[2], tatCaBai[3]], [tatCaBai]);
 
-  // ---- Lịch sử Chơi với AI (V8): chỉ còn Hiệp (gốc) + Ván, không còn
-  // Phiên. Chỉ giữ danhSachVanLS làm state React (cần để hiển thị
-  // "Ván Y/12" sống) — Hiệp không cần giữ state riêng vì mọi thao tác tạo
-  // hiệp đều đọc thẳng localStorage mới nhất (docDanhSach) rồi ghi lại
-  // ngay, không có chỗ nào khác trong màn hình cần đọc lại danh sách Hiệp
-  // — vì GhiDiem.jsx là 1 component riêng, tự giữ bản sao khác của CÙNG
-  // dữ liệu, mount/unmount độc lập khi điều hướng. ----
-  const [danhSachVanLS, setDanhSachVanLS] = useState(() => docDanhSach(KHOA_VAN));
+  // ---- Lịch sử Chơi với AI (V12 Phase 6): đọc/ghi qua Supabase (bảng
+  // hiep_ai/van_ai, xem lichSuAI.js) thay cho localStorage — gắn theo
+  // CHÍNH người đang đăng nhập (nguoi_dung_id), không chia sẻ với ai. ----
+  const {
+    danhSachHiep: danhSachHiepAI, danhSachVan: danhSachVanAI,
+    dangTai: dangTaiAI, loi: loiAI, themHiep: themHiepAI, themVan: themVanAI,
+  } = useDuLieuAI(nguoiDangNhap?.id ?? null);
+  const [dangTaoHiepAI, setDangTaoHiepAI] = useState(false);
 
   // Hiệp AI đang dùng để ghi ván vào — null khi còn ở màn ChonVan (chưa
   // quyết định tiếp hiệp cũ hay bắt đầu hiệp mới). Khai báo TRƯỚC
@@ -230,50 +231,53 @@ function App() {
   }
 
   function chonTiepHiepDoDang() {
-    const hiep = layHiepDangDoHoacNull(docDanhSach(KHOA_HIEP), docDanhSach(KHOA_VAN), NGUON);
+    const hiep = layHiepDangDoHoacNull(danhSachHiepAI, danhSachVanAI, NGUON);
     batDauVanMoi(hiep);
   }
 
-  function chonHiepMoi(nhanVatDaChon, tenNguoiChoi) {
-    const dsHiepTuoi = docDanhSach(KHOA_HIEP);
+  async function chonHiepMoi(nhanVatDaChon, tenNguoiChoi) {
     // nguoiChoi dùng THẲNG tên nhân vật đã chọn (vd "Safeway") làm định
     // danh — ChonVan.jsx đảm bảo 3 nhân vật không trùng nhau nên an toàn.
     const tenDoiThuMoi = nhanVatDaChon.map(id => layNhanVat(id).ten);
     const tenBanMoi = (tenNguoiChoi || '').trim() || 'Bạn';
-    const hiepMoi = taoHiepMoi(NGUON, [tenBanMoi, ...tenDoiThuMoi], '', nhanVatDaChon);
-    const dsHiepMoi = [...dsHiepTuoi, hiepMoi];
-    ghiDanhSach(KHOA_HIEP, dsHiepMoi);
-    batDauVanMoi(hiepMoi);
+    setDangTaoHiepAI(true);
+    try {
+      const hiepMoi = await themHiepAI([tenBanMoi, ...tenDoiThuMoi], nhanVatDaChon);
+      batDauVanMoi(hiepMoi);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setDangTaoHiepAI(false);
+    }
   }
 
   // Tính SỐNG lúc đang chơi — biết ngay đang ở Ván nào (trong Hiệp) để
   // hiển thị trên đầu màn hình.
-  const soVanDaXongHienTai = hiepAIHienTai ? layVanCuaHiep(hiepAIHienTai.id, danhSachVanLS).length : 0;
+  const soVanDaXongHienTai = hiepAIHienTai ? layVanCuaHiep(hiepAIHienTai.id, danhSachVanAI).length : 0;
 
   // Điểm tích lũy CỦA HIỆP ĐANG CHƠI DỞ, tính lại trực tiếp từ danh sách
   // Ván thật mỗi lần render (không cache) — hiển thị ngay cạnh tên mỗi
   // người trên bàn (xem renderTenVaDiem).
-  const tongCongDonHiepHienTai = hiepAIHienTai ? tinhTongKetHiep(layVanCuaHiep(hiepAIHienTai.id, danhSachVanLS)) : {};
+  const tongCongDonHiepHienTai = hiepAIHienTai ? tinhTongKetHiep(layVanCuaHiep(hiepAIHienTai.id, danhSachVanAI)) : {};
 
   // Ghi 1 ván Chơi-AI vào lịch sử, vào đúng hiepAIHienTai — trả về biết
   // ván vừa ghi có phải ván THỨ 12 của hiệp hay không, để nơi gọi quyết
   // định hiện màn "Ván tiếp theo" bình thường hay màn "Tổng kết Hiệp".
-  function ghiVanAIVaoLichSu({ nguoiChoiBaiThat, diem, laThangTrang, loaiThangTrang }) {
-    const dsVanTuoi = docDanhSach(KHOA_VAN);
-    const soThuTuVanTrongHiep = layVanCuaHiep(hiepAIHienTai.id, dsVanTuoi).length + 1;
+  async function ghiVanAIVaoLichSu({ nguoiChoiBaiThat, diem, laThangTrang, loaiThangTrang, chiTietCaVan }) {
+    const soThuTuVanTrongHiep = layVanCuaHiep(hiepAIHienTai.id, danhSachVanAI).length + 1;
     const { nguoiChia, lanChia } = nguoiChiaChoVan(hiepAIHienTai.nguoiChoi, soThuTuVanTrongHiep);
 
-    const vanMoi = taoVanMoi({
+    const vanMoi = await themVanAI({
       hiepId: hiepAIHienTai.id, soThuTuTrongHiep: soThuTuVanTrongHiep, lanChiaThu: lanChia, nguoiChia,
-      nguon: NGUON, diem, nguoiChoiBaiThat, laThangTrang, loaiThangTrang,
-      cheDoThucTeDoiThu: phongCachThatDoiThu,
+      diem, nguoiChoiBaiThat, laThangTrang, loaiThangTrang,
+      cheDoThucTeDoiThu: phongCachThatDoiThu, chiTietCaVan,
     });
-    const danhSachVanMoi = themVanVaoLichSu(vanMoi, dsVanTuoi);
-    ghiDanhSach(KHOA_VAN, danhSachVanMoi);
-    setDanhSachVanLS(danhSachVanMoi);
 
     if (soThuTuVanTrongHiep === 12) {
-      const tongKet = tinhTongKetHiep(layVanCuaHiep(hiepAIHienTai.id, danhSachVanMoi));
+      // `themVanAI` cập nhật `danhSachVanAI` bất đồng bộ (chỉ có hiệu lực
+      // ở lần render SAU) — cộng thêm thủ công `vanMoi` vào đây để tổng
+      // kết hiển thị ĐÚNG NGAY, không cần đợi 1 lần render nữa.
+      const tongKet = tinhTongKetHiep([...layVanCuaHiep(hiepAIHienTai.id, danhSachVanAI), vanMoi]);
       return { hiepVuaXong: true, tongKetHiep: tongKet, hiepSoThuTu: hiepAIHienTai.soThuTu };
     }
     return { hiepVuaXong: false };
@@ -300,13 +304,14 @@ function App() {
     if (!(trang === 'choiAI' && daChonVan)) return;
     if (ketQuaThangTrang && boBaiDaGhiThangTrangRef.current !== boBaiCuaToi) {
       boBaiDaGhiThangTrangRef.current = boBaiCuaToi;
-      const ketQuaLog = ghiVanAIVaoLichSu({
+      ghiVanAIVaoLichSu({
         nguoiChoiBaiThat: tenTatCaNguoiChoi.map((ten, i) => ({ ten, ca13La: tatCaBai[i] })),
         diem: ketQuaThangTrang.diem,
         laThangTrang: true,
         loaiThangTrang: ketQuaThangTrang.ketQuaLoai?.find(l => l !== null),
+      }).then(ketQuaLog => {
+        if (ketQuaLog.hiepVuaXong) setKetQuaHiepVuaXong(ketQuaLog);
       });
-      if (ketQuaLog.hiepVuaXong) setKetQuaHiepVuaXong(ketQuaLog);
     }
   }, [trang, daChonVan, boBaiCuaToi, tatCaBai, ketQuaThangTrang, hiepAIHienTai]);
 
@@ -336,12 +341,16 @@ function App() {
   // "Chơi tiếp" ngay sau khi vừa xong 1 hiệp (từ màn Hết hiệp) — giữ
   // NGUYÊN 3 nhân vật đối thủ của hiệp vừa xong (không đi qua ChonVan nên
   // không có màn chọn lại nhân vật).
-  function choiTiepHiepMoi() {
-    const dsHiepTuoi = docDanhSach(KHOA_HIEP);
-    const hiepMoi = taoHiepMoi(NGUON, hiepAIHienTai.nguoiChoi, '', hiepAIHienTai.nhanVatDoiThu);
-    const dsHiepMoi = [...dsHiepTuoi, hiepMoi];
-    ghiDanhSach(KHOA_HIEP, dsHiepMoi);
-    batDauVanMoi(hiepMoi);
+  async function choiTiepHiepMoi() {
+    setDangTaoHiepAI(true);
+    try {
+      const hiepMoi = await themHiepAI(hiepAIHienTai.nguoiChoi, hiepAIHienTai.nhanVatDoiThu);
+      batDauVanMoi(hiepMoi);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setDangTaoHiepAI(false);
+    }
   }
 
   function chonPreset(id) {
@@ -414,15 +423,13 @@ function App() {
 
   // Phát hiện 1 hiệp AI còn DỞ DANG (chưa đủ 12 ván) từ lần chơi trước, để
   // màn ChonVan cho phép "Tiếp hiệp cũ". Chỉ tính khi đang ở đúng màn chọn
-  // (chưa vào ván chơi). Đọc thẳng localStorage (không dùng state có thể
-  // cũ), giống cách các hàm ghi log khác đã làm.
+  // (chưa vào ván chơi) — dùng dữ liệu đã tải từ Supabase (danhSachHiepAI/
+  // danhSachVanAI, xem useDuLieuAI).
   const hiepAIDoDang = (trang === 'choiAI' && !daChonVan)
     ? (() => {
-        const dsHiep = docDanhSach(KHOA_HIEP);
-        const dsVan = docDanhSach(KHOA_VAN);
-        const hiep = layHiepDangDoHoacNull(dsHiep, dsVan, NGUON);
+        const hiep = layHiepDangDoHoacNull(danhSachHiepAI, danhSachVanAI, NGUON);
         if (!hiep) return null;
-        const vanCuaHiep = layVanCuaHiep(hiep.id, dsVan);
+        const vanCuaHiep = layVanCuaHiep(hiep.id, danhSachVanAI);
         return { ...hiep, soVan: vanCuaHiep.length, tongKet: tinhTongKetHiep(vanCuaHiep) };
       })()
     : null;
@@ -431,7 +438,7 @@ function App() {
   // của hiệp GẦN NHẤT (dù dở dang hay đã xong) để không phải gõ lại mỗi
   // lần, mặc định 'Bạn' nếu chưa từng chơi hiệp nào.
   const tenNguoiChoiMacDinh = (trang === 'choiAI' && !daChonVan)
-    ? layTenNguoiChoiGanNhat(docDanhSach(KHOA_HIEP), NGUON)
+    ? layTenNguoiChoiGanNhat(danhSachHiepAI, NGUON)
     : 'Bạn';
 
   function onPointerDownLa(e, tuIndex) {
@@ -477,7 +484,7 @@ function App() {
     setDragging(null);
   }
 
-  function xacNhanBai() {
+  async function xacNhanBai() {
     if (ketQuaThangTrang) return;
 
     if (ketQuaGoiY) {
@@ -509,9 +516,10 @@ function App() {
     ];
     const ketQua = tinhDiem(nguoiChoi, ruleset);
     setKetQuaDiem(ketQua);
-    const ketQuaLog = ghiVanAIVaoLichSu({
+    const ketQuaLog = await ghiVanAIVaoLichSu({
       nguoiChoiBaiThat: nguoiChoi.map(p => ({ ten: p.ten, chiDau: p.chiDau, chiGiua: p.chiGiua, chiCuoi: p.chiCuoi })),
       diem: ketQua.diem,
+      chiTietCaVan: tinhChiTietCaVan(nguoiChoi, ruleset),
     });
     if (ketQuaLog.hiepVuaXong) setKetQuaHiepVuaXong(ketQuaLog);
     setDaXacNhan(true);
@@ -544,7 +552,7 @@ function App() {
     setDangXacNhanBaoU(false);
   }
 
-  function xacNhanBaoU() {
+  async function xacNhanBaoU() {
     setDangXacNhanBaoU(false);
     const nguoiChoiThangTrang = [
       { ten: tenBan, ca13La: chiDauGoc.concat(chiGiuaGoc, chiCuoiGoc) },
@@ -558,13 +566,13 @@ function App() {
     let ketQuaCuoi, ketQuaLog;
     if (ketQuaDung) {
       ketQuaCuoi = ketQuaDung;
-      ketQuaLog = ghiVanAIVaoLichSu({
+      ketQuaLog = await ghiVanAIVaoLichSu({
         nguoiChoiBaiThat: baiThatDeGhi, diem: ketQuaDung.diem,
         laThangTrang: true, loaiThangTrang: ketQuaDung.ketQuaLoai?.[0],
       });
     } else {
       ketQuaCuoi = tinhDiemBaoUSai(nguoiChoiThangTrang, ruleset);
-      ketQuaLog = ghiVanAIVaoLichSu({
+      ketQuaLog = await ghiVanAIVaoLichSu({
         nguoiChoiBaiThat: baiThatDeGhi, diem: ketQuaCuoi.diem,
         laThangTrang: false, loaiThangTrang: null,
       });
@@ -698,7 +706,16 @@ function App() {
           <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
             ← Trang chủ
           </button>
-          <LichSu nhom={nhomDangChon} />
+          <LichSu nhom={nhomDangChon} nguoiDangNhap={nguoiDangNhap} />
+        </>
+      )}
+
+      {trang === 'phanTich' && (
+        <>
+          <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
+            ← Trang chủ
+          </button>
+          <PhanTich />
         </>
       )}
 
@@ -707,12 +724,17 @@ function App() {
           <button className="nut-ve-trang-chu" onClick={() => setTrang('trangChu')}>
             ← Trang chủ
           </button>
-          <ChonVan
-            hiepDoDang={hiepAIDoDang}
-            tenNguoiChoiMacDinh={tenNguoiChoiMacDinh}
-            onChonTiepHiep={chonTiepHiepDoDang}
-            onChonHiepMoi={chonHiepMoi}
-          />
+          {dangTaiAI && <p>Đang tải...</p>}
+          {!dangTaiAI && loiAI && <p className="loi-dang-nhap">Lỗi kết nối: {loiAI} — thử lại sau.</p>}
+          {!dangTaiAI && !loiAI && (
+            <ChonVan
+              hiepDoDang={hiepAIDoDang}
+              tenNguoiChoiMacDinh={tenNguoiChoiMacDinh}
+              onChonTiepHiep={chonTiepHiepDoDang}
+              onChonHiepMoi={chonHiepMoi}
+              dangXuLy={dangTaoHiepAI}
+            />
+          )}
         </>
       )}
 

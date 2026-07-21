@@ -29,7 +29,7 @@ function dinhDauDiem(d) {
 
 const TEN_MAC_DINH = ['Đối thủ 1', 'Đối thủ 2', 'Đối thủ 3'];
 
-function ChonVan({ hiepDoDang, tenNguoiChoiMacDinh, onChonTiepHiep, onChonHiepMoi }) {
+function ChonVan({ hiepDoDang, tenNguoiChoiMacDinh, onChonTiepHiep, onChonHiepMoi, dangXuLy }) {
   const [nhanVatDoiThu, setNhanVatDoiThu] = useState(['safeway', 'newbalance', 'madmax']);
   const [tenNguoiChoi, setTenNguoiChoi] = useState(tenNguoiChoiMacDinh ?? 'Bạn');
   const tenDoiThuDoDang = hiepDoDang?.nguoiChoi?.slice(1) ?? TEN_MAC_DINH;
@@ -103,7 +103,7 @@ function ChonVan({ hiepDoDang, tenNguoiChoiMacDinh, onChonTiepHiep, onChonHiepMo
       )}
 
       {hiepDoDang && (
-        <button className="nut-chon-van nut-chon-van-tiep" onClick={onChonTiepHiep} style={{ marginBottom: 8 }}>
+        <button className="nut-chon-van nut-chon-van-tiep" onClick={onChonTiepHiep} disabled={dangXuLy} style={{ marginBottom: 8 }}>
           Tiếp hiệp cũ — Hiệp {hiepDoDang.soThuTu} (Ván {hiepDoDang.soVan + 1}/12)
         </button>
       )}
@@ -118,8 +118,8 @@ function ChonVan({ hiepDoDang, tenNguoiChoiMacDinh, onChonTiepHiep, onChonHiepMo
         <div className="vi-tri-6h">{renderNhapTenNguoiChoi()}</div>
       </div>
 
-      <button className="nut-chon-van" onClick={batDauHiepMoi}>
-        Bắt đầu hiệp mới
+      <button className="nut-chon-van" onClick={batDauHiepMoi} disabled={dangXuLy}>
+        {dangXuLy ? 'Đang tạo...' : 'Bắt đầu hiệp mới'}
       </button>
 
       {hiepDoDang && (

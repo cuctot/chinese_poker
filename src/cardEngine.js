@@ -174,6 +174,57 @@ function tenLoaiChiTiet(tenChi, ma) {
   return (tenChi === 'dau' ? TEN_LOAI_3_LA_GT : TEN_LOAI_5_LA_GT)[ma] || ma;
 }
 
+// V13 Phase 1 — Tính chi tiết cho 1 người chơi trong 1 ván: loại bài
+// từng chi, có binh lủng không, có ăn sập TRỌN VẸN ít nhất 1 đối thủ
+// không. `daAnSap` chỉ tính khi CẢ 2 bên đều hợp lệ (binh lủng đã có luật
+// xử lý riêng, không cộng dồn "ăn sập" lên trên) — dừng ngay khi tìm thấy
+// 1 đối thủ bị ăn sập trọn vẹn, không cần biết ăn sập bao nhiêu người.
+export function tinhChiTietMotNguoi(nguoiNay, tatCaNguoiChoi, ruleset) {
+  const dDau = danhGia3La(nguoiNay.chiDau);
+  const dGiua = danhGia5La(nguoiNay.chiGiua);
+  const dCuoi = danhGia5La(nguoiNay.chiCuoi);
+
+  const laBinhLung = !xepBaiHopLe(nguoiNay.chiDau, nguoiNay.chiGiua, nguoiNay.chiCuoi, ruleset);
+
+  // So Giữa/Cuối phải qua `dieuChinhSoSanhSanhHa` giống HỆT `soBai2Nguoi`
+  // (đường tính điểm thật) — nếu không, ván có "sảnh hà" (A-2-3-4-5) dưới
+  // ruleset `sanhHaYeuNhat` sẽ so sai thứ bậc, dẫn tới `daAnSap` không
+  // khớp với điểm ĐÃ tính ở `tinhDiem`.
+  const sGiua = dieuChinhSoSanhSanhHa(dGiua, ruleset);
+  const sCuoi = dieuChinhSoSanhSanhHa(dCuoi, ruleset);
+
+  let daAnSap = false;
+  if (!laBinhLung) {
+    for (const doiThu of tatCaNguoiChoi) {
+      if (doiThu === nguoiNay) continue;
+      if (!xepBaiHopLe(doiThu.chiDau, doiThu.chiGiua, doiThu.chiCuoi, ruleset)) continue;
+      const thangDau = soSanh(dDau, danhGia3La(doiThu.chiDau)) > 0;
+      const thangGiua = soSanh(sGiua, dieuChinhSoSanhSanhHa(danhGia5La(doiThu.chiGiua), ruleset)) > 0;
+      const thangCuoi = soSanh(sCuoi, dieuChinhSoSanhSanhHa(danhGia5La(doiThu.chiCuoi), ruleset)) > 0;
+      if (thangDau && thangGiua && thangCuoi) { daAnSap = true; break; }
+    }
+  }
+
+  return {
+    loaiTungChi: {
+      dau: tenLoaiChiTiet('dau', maLoaiChiTiet(dDau, 'dau')),
+      giua: tenLoaiChiTiet('giua', maLoaiChiTiet(dGiua, 'giua')),
+      cuoi: tenLoaiChiTiet('cuoi', maLoaiChiTiet(dCuoi, 'cuoi')),
+    },
+    laBinhLung,
+    daAnSap,
+  };
+}
+
+// Tính cho TẤT CẢ người chơi trong 1 ván -> trả về object theo tên
+export function tinhChiTietCaVan(nguoiChoi, ruleset) {
+  const ketQua = {};
+  for (const p of nguoiChoi) {
+    ketQua[p.ten] = tinhChiTietMotNguoi(p, nguoiChoi, ruleset);
+  }
+  return ketQua;
+}
+
 function soBai2Nguoi(ruleset, a, b) {
   const dDauA = danhGia3La(a.chiDau), dDauB = danhGia3La(b.chiDau);
   const dGiuaA = danhGia5La(a.chiGiua), dGiuaB = danhGia5La(b.chiGiua);
