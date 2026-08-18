@@ -62,52 +62,46 @@ build của `npm run dev` — nên dùng bước này để kiểm tra lần cu�
 
 ---
 
-## 4. Deploy miễn phí lên Cloudflare Pages
+## 4. Deploy miễn phí lên Cloudflare Workers
 
-Vì app không có backend, Cloudflare Pages (free tier) là lựa chọn hợp lý: build free,
-băng thông free không giới hạn, có domain `*.pages.dev` miễn phí, tự có HTTPS.
+App dùng `@cloudflare/vite-plugin` (xem `vite.config.js` + `wrangler.jsonc`), nên đích
+deploy thực tế là **Cloudflare Workers** (static assets), KHÔNG phải Cloudflare Pages —
+đây là sản phẩm mới hơn của Cloudflare, cũng có free tier, domain miễn phí dạng
+`*.workers.dev`, tự có HTTPS.
 
-Có 2 cách — chọn 1 trong 2:
+Có 2 cách — dùng song song cũng được:
 
-### Cách A — Deploy trực tiếp bằng CLI (nhanh nhất để test, không cần GitHub)
+### Cách A — Deploy trực tiếp bằng CLI
 
 ```bash
-npm run build
-npx wrangler pages deploy dist --project-name=chinese-poker
+npm run deploy
 ```
 
-- Lần đầu chạy, `wrangler` sẽ mở trình duyệt để bạn đăng nhập/đăng ký tài khoản
-  Cloudflare (miễn phí).
-- Sau khi deploy xong, terminal in ra link dạng:
-  `https://chinese-poker.pages.dev` (hoặc `https://<hash>.chinese-poker.pages.dev` cho
-  mỗi lần deploy).
-- Muốn cập nhật bản mới: build lại rồi chạy lại đúng lệnh `wrangler pages deploy dist
-  ...` ở trên — không cần cấu hình gì thêm.
+Lệnh này chạy `vite build` rồi `wrangler deploy`. Lần đầu chạy, `wrangler` sẽ mở trình
+duyệt để bạn đăng nhập/đăng ký tài khoản Cloudflare (miễn phí) — dùng `npx wrangler
+login` nếu cần đăng nhập lại. Deploy xong terminal in ra link dạng:
+`https://chinese-poker.<subdomain>.workers.dev`.
 
-Đây là cách nhanh nhất để gửi link cho bạn bè test online, không cần đưa code lên
-GitHub trước.
+Đây là cách nhanh nhất để đẩy 1 bản thủ công (ví dụ test nhanh trước khi push code).
 
-### Cách B — Kết nối GitHub để tự động deploy mỗi lần push
+### Cách B — Kết nối GitHub để tự động deploy mỗi lần push (đã bật)
 
-Phù hợp nếu bạn muốn mỗi lần `git push` là tự động build & deploy.
+Repo `cuctot/chinese_poker` đã được connect với Cloudflare Workers Builds, theo dõi
+nhánh **`develop`** — mỗi lần `git push` lên `develop`, Cloudflare tự build
+(`npm run build`) và deploy lại, không cần chạy `npm run deploy` thủ công.
 
-1. Đẩy code lên một repo GitHub (repo hiện tại chưa có remote — cần tạo repo trên
-   GitHub rồi `git remote add origin ...` và `git push`).
-2. Vào [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers & Pages** →
-   **Create application** → tab **Pages** → **Connect to Git**.
-3. Chọn repo `chinese-poker`, cấu hình build:
-   - **Framework preset**: Vite
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-4. Bấm **Save and Deploy**. Từ lần sau, mỗi lần push lên nhánh chính, Cloudflare tự
-   build và deploy lại, có cả preview URL riêng cho mỗi PR/branch khác.
+Muốn đổi nhánh theo dõi hoặc ngắt kết nối: vào [Cloudflare
+dashboard](https://dash.cloudflare.com) → **Workers & Pages** → Worker `chinese-poker` →
+**Settings** → mục **Build**.
 
 ### Lưu ý chung
 
 - Không cần file `_redirects` vì app không dùng client-side router (không có
-  `react-router` hay tương tự) — chỉ có 1 trang `index.html` duy nhất.
-- Muốn gắn domain riêng: vào project trên Cloudflare Pages → **Custom domains** →
-  thêm domain đã quản lý qua Cloudflare (miễn phí, tự có HTTPS).
-- Cả 2 cách đều hoàn toàn miễn phí ở quy mô test/demo cá nhân (Cloudflare Pages free
-  tier: 500 builds/tháng cho Git integration, không giới hạn cho deploy qua CLI/direct
-  upload, băng thông không giới hạn).
+  `react-router` hay tương tự) — chỉ có 1 trang `index.html` duy nhất. `wrangler.jsonc`
+  đã cấu hình `assets.not_found_handling: "single-page-application"` để xử lý việc này.
+- Muốn gắn domain riêng: vào Worker trên dashboard → **Settings** → **Domains &
+  Routes** → thêm domain đã quản lý qua Cloudflare (miễn phí, tự có HTTPS).
+- Cả 2 cách đều miễn phí ở quy mô test/demo cá nhân (Cloudflare Workers free tier: 100k
+  requests/ngày, băng thông static assets không tính vào giới hạn đó).
+- Kiểm tra lịch sử deploy (thủ công lẫn tự động): `npx wrangler deployments list --name
+  chinese-poker`.
